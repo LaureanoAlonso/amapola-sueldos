@@ -126,6 +126,7 @@
   • Ausencia injustificada: descuenta 1 valor día completo por cada día. Ausencia justificada: sin descuento.<br>
   • Bono: margen de 4 infracciones "gratis" en el mes, máximo 1 por semana (semana = tramo de 7 días del mes: 1-7, 8-14, etc). La 2ª infracción de una misma semana ya es X, aunque no se llegue a 4 en el mes. Cada X descuenta $5.000 del bono (piso $0). Con 0 X, el bono se paga al doble.<br>
   • Los datos de este módulo viven en la nube (Firebase), en colecciones separadas de la app de fichaje de la tablet, para no interferir con ella.<br>
+  • "Horas reales trabajadas" se autocompleta sumando los turnos de la app de fichajes (colección "jornadas") para ese empleado y ese mes, la primera vez que el campo está en 0. Siempre se puede editar a mano; una vez que tiene un valor manual, no se vuelve a pisar solo. Al lado del campo se muestra el total que reporta fichajes y un botón "usar" para volver a copiarlo si hace falta.<br>
   • Estas reglas son una interpretación de la consigna original; si algo no coincide con el reglamento real, se ajusta fácilmente en el código (buscar la función <code>calcularEmpleadoMes</code> y <code>calcularX</code>).
   </p>
 </div>
@@ -260,15 +261,15 @@ function esq(dom,lun,mar,mie,jue,vie,sab){ return [dom,lun,mar,mie,jue,vie,sab];
 function seedEmpleados(){
   return [
     {id:uid(), codigo:'VAL', nombre:'Valen', sueldoBase:0, bonoBase:0, esquema:esq(8,8,0,6,6,6,8)},
-    {id:uid(), codigo:'LUD', nombre:'Ludmi', sueldoBase:0, bonoBase:0, esquema:esq(8,8,8,8,8,0,8)},
+    {id:uid(), codigo:'LUD', nombre:'Ludmila', sueldoBase:0, bonoBase:0, esquema:esq(8,8,8,8,8,0,8)},
     {id:uid(), codigo:'MIC', nombre:'Mica', sueldoBase:0, bonoBase:0, esquema:esq(0,8,8,8,8,8,8)},
-    {id:uid(), codigo:'DEN', nombre:'Deni', sueldoBase:0, bonoBase:0, esquema:esq(8,8,8,0,8,8,8)},
+    {id:uid(), codigo:'DEN', nombre:'Denilson', sueldoBase:0, bonoBase:0, esquema:esq(8,8,8,0,8,8,8)},
     {id:uid(), codigo:'PED', nombre:'Pedro', sueldoBase:0, bonoBase:0, esquema:esq(0,8,8,8,8,8,8)},
     {id:uid(), codigo:'MIK', nombre:'Mike', sueldoBase:0, bonoBase:0, esquema:esq(12,0,8,8,8,8,12)},
     {id:uid(), codigo:'PRI', nombre:'Pri', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
     {id:uid(), codigo:'CAT', nombre:'Cata', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
     {id:uid(), codigo:'LAU', nombre:'Lauti', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
-    {id:uid(), codigo:'ROC', nombre:'Rocío', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
+    {id:uid(), codigo:'ROC', nombre:'Rocio', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
     {id:uid(), codigo:'OMA', nombre:'Omar', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)}
   ];
 }
@@ -444,6 +445,33 @@ function feriadosDelMesActual(anioData){
   return anioData.filter(f => f.date.slice(5,7) === mesStr && f.date.slice(0,4) === String(estado.year));
 }
 
+/* ============ FICHAJES (app de la tablet, colección "jornadas") ============ */
+// Trae los turnos de un empleado (por nombre exacto) y suma las horas del mes elegido.
+// Lee de la colección "jornadas" de la app de fichaje (misma base de Firebase, distinta colección).
+const fichajeCache = {}; // cache en memoria: 'Nombre|2026-07' -> horas
+async function getHorasFichajeMes(nombreEmpleado, year, mIdx){
+  const key = nombreEmpleado + '|' + ym(year, mIdx);
+  if(fichajeCache[key] !== undefined) return fichajeCache[key];
+  const mesPrefix = ym(year, mIdx); // 'YYYY-MM'
+  let totalHoras = 0;
+  try{
+    const snap = await db.collection('jornadas').where('empleado', '==', nombreEmpleado).get();
+    snap.forEach(doc=>{
+      const d = doc.data();
+      if(d.fecha && d.fecha.slice(0,7) === mesPrefix && d.inicio && d.fin){
+        const ini = new Date(d.inicio);
+        const fin = new Date(d.fin);
+        const horas = (fin - ini) / (1000*60*60);
+        if(horas > 0 && horas < 24) totalHoras += horas;
+      }
+    });
+  }catch(e){
+    totalHoras = null; // sin acceso o sin datos
+  }
+  fichajeCache[key] = totalHoras;
+  return totalHoras;
+}
+
 /* ============ NAV ============ */
 function switchView(name){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -556,9 +584,22 @@ async function renderCarga(){
     info.innerHTML = feriadosMes.map(f=> '<span class="pill info">'+f.date+' — '+(f.localName||f.name)+'</span>').join(' ');
   }
   await ensureLiquidacionLoaded(key);
-  renderCargaLista(feriadosMes);
+
+  // Traer horas de fichajes para cada empleado y autocompletar si el campo está en 0
+  const datosMes = getDatosMes();
+  const fichajeMap = {};
+  await Promise.all(empleados.map(async emp=>{
+    const horas = await getHorasFichajeMes(emp.nombre, estado.year, estado.mIdx);
+    fichajeMap[emp.id] = horas;
+    if(!mesAprobado(key) && horas!==null && horas>0 && (datosMes[emp.id].horasReales||0)===0){
+      datosMes[emp.id].horasReales = Math.round(horas*10)/10;
+    }
+  }));
+  saveMensualKey(key).catch(console.error);
+
+  renderCargaLista(feriadosMes, fichajeMap);
 }
-function renderCargaLista(feriadosMes){
+function renderCargaLista(feriadosMes, fichajeMap){
   const datosMes = getDatosMes();
   const key = getMesKey();
   const bloqueado = mesAprobado(key);
@@ -566,6 +607,10 @@ function renderCargaLista(feriadosMes){
   cont.innerHTML = empleados.map(emp=>{
     const d = datosMes[emp.id];
     const dis = bloqueado ? 'disabled' : '';
+    const horasFichaje = fichajeMap ? fichajeMap[emp.id] : undefined;
+    const fichajeTexto = horasFichaje===null ? 'no se pudo leer fichajes'
+      : horasFichaje===undefined ? 'calculando...'
+      : horasFichaje.toFixed(1) + ' hs según fichajes';
     const feriadosHtml = feriadosMes.length ? feriadosMes.map(f=>{
       const info = d.feriados[f.date] || {horas:0};
       const wd = new Date(f.date+'T00:00:00').getDay();
@@ -586,7 +631,10 @@ function renderCargaLista(feriadosMes){
     return '<div class="empcard">'
       + '<h3>'+emp.nombre+' <span class="muted">('+emp.codigo+')</span></h3>'
       + '<div class="row">'
-      + '<div><label>Horas reales trabajadas</label><input type="number" min="0" '+dis+' data-action="horasReales" data-id="'+emp.id+'" value="'+d.horasReales+'"></div>'
+      + '<div><label>Horas reales trabajadas</label><input type="number" min="0" '+dis+' data-action="horasReales" data-id="'+emp.id+'" value="'+d.horasReales+'">'
+      + '<p class="muted" style="margin-top:4px;max-width:160px;">'+fichajeTexto
+      + (bloqueado || horasFichaje===null || horasFichaje===undefined ? '' : ' <button class="close-x" style="color:var(--gold);" data-action="usar-fichaje" data-id="'+emp.id+'" data-horas="'+horasFichaje+'">usar</button>')
+      + '</p></div>'
       + '<div><label>Ausencias justificadas (días)</label><input type="number" min="0" '+dis+' data-action="ausJustificadas" data-id="'+emp.id+'" value="'+d.ausJustificadas+'"></div>'
       + '<div><label>Ausencias injustificadas (días)</label><input type="number" min="0" '+dis+' data-action="ausInjustificadas" data-id="'+emp.id+'" value="'+d.ausInjustificadas+'"></div>'
       + '<div><label>Cuenta corriente ($)</label><input type="number" min="0" '+dis+' data-action="cuentaCorriente" data-id="'+emp.id+'" value="'+d.cuentaCorriente+'"></div>'
@@ -639,6 +687,13 @@ document.getElementById('carga-list').addEventListener('click', e=>{
     const datosMes = getDatosMes();
     const d = datosMes[id];
     d.infracciones = (d.infracciones||[]).filter(x=>x.id!==infid);
+    saveMensualKey(getMesKey()).catch(console.error);
+    renderCarga();
+  } else if(t.dataset.action==='usar-fichaje'){
+    const id = t.dataset.id;
+    const horas = parseFloat(t.dataset.horas)||0;
+    const datosMes = getDatosMes();
+    datosMes[id].horasReales = Math.round(horas*10)/10;
     saveMensualKey(getMesKey()).catch(console.error);
     renderCarga();
   }
