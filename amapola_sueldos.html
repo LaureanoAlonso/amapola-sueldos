@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amapola Resto — Liquidación de Sueldos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#0f0e0c; --surface:#1a1916; --gold:#e8b84b; --text:#f0ede6;
+    --green:#4caf7d; --red:#e05c3a; --purple:#9b7fd5; --border:#2e2c26;
+    --surface2:#211f1b;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg); color:var(--text); font-family:'DM Mono',monospace; margin:0; padding:0;}
+  h1,h2,h3,.brand,.tab,button{font-family:'Syne',sans-serif; font-weight:800;}
+  header{background:var(--surface); border-bottom:1px solid var(--border); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+  .brand{color:var(--gold); font-size:20px; letter-spacing:0.5px;}
+  .brand span{color:var(--text); font-weight:500; font-family:'DM Mono',monospace; font-size:12px; display:block;}
+  nav.tabs{display:flex; gap:6px; flex-wrap:wrap;}
+  .tab{background:transparent; color:var(--text); border:1px solid var(--border); border-radius:10px; padding:8px 14px; cursor:pointer; font-size:13px;}
+  .tab.active{background:var(--gold); color:#231d0f; border-color:var(--gold);}
+  main{padding:20px; max-width:1300px; margin:0 auto;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; margin-bottom:16px;}
+  .card h2{margin:0 0 12px 0; font-size:16px; color:var(--gold);}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  label{font-size:11px; color:#b8b3a4; display:block; margin-bottom:4px;}
+  input,select{background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:7px 9px; font-family:'DM Mono',monospace; font-size:13px;}
+  input[type=number]{width:90px;}
+  input[type=date]{width:150px;}
+  button{background:var(--gold); color:#231d0f; border:none; border-radius:9px; padding:9px 14px; cursor:pointer; font-size:12px;}
+  button.secondary{background:transparent; color:var(--gold); border:1px solid var(--gold);}
+  button.danger{background:var(--red); color:#fff;}
+  button.green{background:var(--green); color:#0d1f16;}
+  button.purple{background:var(--purple); color:#1c1330;}
+  button:disabled{opacity:0.4; cursor:not-allowed;}
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th,td{padding:8px 6px; border-bottom:1px solid var(--border); text-align:left; white-space:nowrap;}
+  th{color:var(--gold); font-family:'Syne',sans-serif; font-weight:700; font-size:11px; text-transform:uppercase;}
+  .num{text-align:right; font-variant-numeric:tabular-nums;}
+  .pos{color:var(--green);}
+  .neg{color:var(--red);}
+  .pill{display:inline-block; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:700;}
+  .pill.ok{background:rgba(76,175,125,0.15); color:var(--green);}
+  .pill.warn{background:rgba(224,92,58,0.15); color:var(--red);}
+  .pill.info{background:rgba(155,127,213,0.15); color:var(--purple);}
+  .grid7{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
+  .daybox{background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px; text-align:center;}
+  .daybox label{margin-bottom:2px;}
+  .muted{color:#8a8577; font-size:11px;}
+  .infra-item{display:flex; justify-content:space-between; align-items:center; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:5px 8px; margin-bottom:4px; font-size:12px;}
+  .infra-item.isx{border-color:var(--red);}
+  .empcard{border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:12px; background:var(--surface2);}
+  .empcard h3{margin:0 0 8px 0; font-size:14px; color:var(--text);}
+  .close-x{background:transparent; color:var(--red); border:none; cursor:pointer; font-weight:800; padding:0 4px;}
+  #info-panel{display:none; margin-top:10px;}
+  .recibo-box{max-width:520px; margin:0 auto; background:#fff; color:#111; padding:24px; border-radius:8px; font-family:'DM Mono',monospace;}
+  .recibo-box h2{color:#111; font-family:'Syne',sans-serif;}
+  .recibo-line{display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed #ccc; font-size:13px;}
+  .recibo-total{display:flex; justify-content:space-between; padding:10px 0; font-weight:800; font-size:16px; border-top:2px solid #111; margin-top:8px;}
+  .login-overlay{position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:1000;}
+  .login-box{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:32px; width:320px; max-width:90vw;}
+  .login-box input{width:100%;}
+  .login-box button{margin-top:16px; width:100%;}
+  @media print{
+    header, nav, .no-print{display:none !important;}
+    main{padding:0;}
+    body{background:#fff;}
+    .view{display:none !important;}
+    .view.print-active{display:block !important;}
+  }
+</style>
+</head>
+<body>
+
+<div id="login-overlay" class="login-overlay">
+  <div class="login-box">
+    <div class="brand" style="margin-bottom:20px;">AMAPOLA RESTO<span>Liquidación de Sueldos</span></div>
+    <label>Usuario</label>
+    <input type="email" id="login-email" placeholder="usuario@amapolaresto.com" autocomplete="username">
+    <label style="margin-top:10px;">Contraseña</label>
+    <input type="password" id="login-pass" autocomplete="current-password">
+    <button id="btn-login">Ingresar</button>
+    <p id="login-error" class="muted" style="color:var(--red); display:none; margin-top:10px;"></p>
+  </div>
+</div>
+
+<div id="app-root" style="display:none;">
+<header class="no-print">
+  <div class="brand">AMAPOLA RESTO<span>Liquidación de Sueldos</span></div>
+  <nav class="tabs">
+    <button class="tab" data-view="config">Empleados</button>
+    <button class="tab" data-view="carga">Carga Mensual</button>
+    <button class="tab" data-view="liquidacion">Liquidación</button>
+    <button class="tab" data-view="recibo">Recibo</button>
+    <button class="tab" data-view="backup">Backup</button>
+  </nav>
+  <div class="row">
+    <div>
+      <label>Mes de trabajo</label>
+      <select id="sel-mes"></select>
+    </div>
+    <div>
+      <label>Año</label>
+      <select id="sel-anio"></select>
+    </div>
+    <button class="secondary" id="btn-info">ℹ️ Reglas aplicadas</button>
+    <button class="secondary" id="btn-logout">Cerrar sesión</button>
+  </div>
+</header>
+
+<div id="info-panel" class="card no-print" style="margin:14px 20px;">
+  <h2>Reglas de cálculo aplicadas</h2>
+  <p class="muted">
+  • Horas contractuales mensuales: se calculan con el calendario real del mes (se cuentan los días efectivos de cada mes según el esquema semanal de cada empleado, no un promedio fijo).<br>
+  • Valor hora = sueldo base ÷ horas contractuales del mes. Valor día = sueldo base ÷ días laborables del mes. Ambos varían mes a mes.<br>
+  • Horas extra = horas reales trabajadas − horas contractuales del mes (si es positivo), pagadas al doble del valor hora.<br>
+  • Feriado trabajado: por cada feriado, se compara lo trabajado contra la carga horaria normal de ese empleado para ese día de la semana. Las horas dentro de su carga habitual se pagan con un plus de 1x valor hora (quedan "al doble"). Las horas que superan su carga habitual ese día se pagan con un plus de 2x valor hora (quedan a 4x en total: normal + extra + extra doblada por feriado).<br>
+  • Ausencia injustificada: descuenta 1 valor día completo por cada día. Ausencia justificada: sin descuento.<br>
+  • Bono: margen de 4 infracciones "gratis" en el mes, máximo 1 por semana (semana = tramo de 7 días del mes: 1-7, 8-14, etc). La 2ª infracción de una misma semana ya es X, aunque no se llegue a 4 en el mes. Cada X descuenta $5.000 del bono (piso $0). Con 0 X, el bono se paga al doble.<br>
+  • Los datos de este módulo viven en la nube (Firebase), en colecciones separadas de la app de fichaje de la tablet, para no interferir con ella.<br>
+  • Estas reglas son una interpretación de la consigna original; si algo no coincide con el reglamento real, se ajusta fácilmente en el código (buscar la función <code>calcularEmpleadoMes</code> y <code>calcularX</code>).
+  </p>
+</div>
+
+<main>
+
+  <!-- VISTA CONFIG -->
+  <section class="view" id="view-config">
+    <div class="card">
+      <h2>Empleados</h2>
+      <div id="emp-list"></div>
+      <button id="btn-add-emp">+ Agregar empleado</button>
+    </div>
+  </section>
+
+  <!-- VISTA CARGA MENSUAL -->
+  <section class="view" id="view-carga">
+    <div class="card">
+      <h2>Feriados del mes</h2>
+      <div id="feriados-info" class="muted">Cargando feriados...</div>
+    </div>
+    <div class="card">
+      <h2>Carga por empleado</h2>
+      <div id="carga-list"></div>
+    </div>
+  </section>
+
+  <!-- VISTA LIQUIDACION -->
+  <section class="view" id="view-liquidacion">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <h2 style="margin:0;">Liquidación del mes</h2>
+        <div class="row">
+          <span id="liq-estado" class="pill info">Borrador</span>
+          <button class="secondary" id="btn-recalcular">Recalcular</button>
+          <button class="green" id="btn-aprobar">Aprobar liquidación</button>
+          <button class="purple" id="btn-reabrir" style="display:none;">Reabrir</button>
+          <button id="btn-export-excel">Exportar Excel</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="tabla-liquidacion">
+          <thead>
+            <tr>
+              <th>Código</th><th>Nombre</th><th class="num">Sueldo Base</th>
+              <th class="num">Hs. Extra</th><th class="num">Monto Extra</th>
+              <th class="num">Feriados</th><th class="num">Ausencias Injust.</th>
+              <th class="num">Desc. Ausencias</th><th class="num">Bono</th>
+              <th class="num">X</th><th class="num">Cta. Cte.</th>
+              <th class="num">Total Neto</th>
+            </tr>
+          </thead>
+          <tbody id="liq-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- VISTA RECIBO -->
+  <section class="view" id="view-recibo">
+    <div class="card no-print">
+      <h2>Recibo de sueldo</h2>
+      <div class="row">
+        <div>
+          <label>Empleado</label>
+          <select id="recibo-emp"></select>
+        </div>
+        <button id="btn-imprimir">Imprimir / Guardar PDF</button>
+      </div>
+    </div>
+    <div id="recibo-render"></div>
+  </section>
+
+  <!-- VISTA BACKUP -->
+  <section class="view" id="view-backup">
+    <div class="card">
+      <h2>Backup de datos</h2>
+      <p class="muted">Los datos viven en la nube (Firebase / Firestore), así que se puede acceder desde cualquier lugar. Igual conviene exportar un backup en JSON de tanto en tanto (por ejemplo, después de aprobar cada liquidación) y guardarlo aparte, por las dudas.</p>
+      <div class="row">
+        <button id="btn-export-json">Exportar backup (JSON)</button>
+        <button class="secondary" id="btn-import-json">Importar backup (JSON)</button>
+        <input type="file" id="file-import-json" accept="application/json" style="display:none;">
+      </div>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<script>
+/* ============ FIREBASE INIT ============ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCrEXw_5X1C3bIU_OgK-nDwrPSPNHfRGOs",
+  authDomain: "amapola-personal.firebaseapp.com",
+  projectId: "amapola-personal",
+  storageBucket: "amapola-personal.firebasestorage.app",
+  messagingSenderId: "525448021276",
+  appId: "1:525448021276:web:f204eca8343b962c62a6d9",
+  measurementId: "G-FCRWGD3HQE"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const COL = {
+  empleados: 'amapola_sueldos_empleados',
+  mensual: 'amapola_sueldos_mensual',
+  liquidaciones: 'amapola_sueldos_liquidaciones',
+  feriados: 'amapola_sueldos_feriados_cache'
+};
+
+/* ============ CONSTANTES ============ */
+const DIAS_SEMANA = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const TIPOS_INFRACCION = [
+  'Llegada tarde',
+  'Sin uniforme completo',
+  'No registró inicio/fin de jornada',
+  'No registró salida en la app',
+  'Uso de celular en horario laboral',
+  'Comió/bebió fuera del tiempo de descanso',
+  'Descanso fuera de la franja definida'
+];
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+/* ============ HELPERS ============ */
+function uid(){ return 'e' + Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
+function fmtMoney(n){ n = Math.round(n||0); return '$' + n.toLocaleString('es-AR'); }
+function ym(y,mIdx){ return y + '-' + String(mIdx+1).padStart(2,'0'); }
+
+/* ============ SEED ============ */
+function esq(dom,lun,mar,mie,jue,vie,sab){ return [dom,lun,mar,mie,jue,vie,sab]; }
+function seedEmpleados(){
+  return [
+    {id:uid(), codigo:'VAL', nombre:'Valen', sueldoBase:0, bonoBase:0, esquema:esq(8,8,0,6,6,6,8)},
+    {id:uid(), codigo:'LUD', nombre:'Ludmi', sueldoBase:0, bonoBase:0, esquema:esq(8,8,8,8,8,0,8)},
+    {id:uid(), codigo:'MIC', nombre:'Mica', sueldoBase:0, bonoBase:0, esquema:esq(0,8,8,8,8,8,8)},
+    {id:uid(), codigo:'DEN', nombre:'Deni', sueldoBase:0, bonoBase:0, esquema:esq(8,8,8,0,8,8,8)},
+    {id:uid(), codigo:'PED', nombre:'Pedro', sueldoBase:0, bonoBase:0, esquema:esq(0,8,8,8,8,8,8)},
+    {id:uid(), codigo:'MIK', nombre:'Mike', sueldoBase:0, bonoBase:0, esquema:esq(12,0,8,8,8,8,12)},
+    {id:uid(), codigo:'PRI', nombre:'Pri', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
+    {id:uid(), codigo:'CAT', nombre:'Cata', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
+    {id:uid(), codigo:'LAU', nombre:'Lauti', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
+    {id:uid(), codigo:'ROC', nombre:'Rocío', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
+    {id:uid(), codigo:'OMA', nombre:'Omar', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)}
+  ];
+}
+
+/* ============ ESTADO EN MEMORIA (se llena desde Firestore) ============ */
+let empleados = [];
+let mensual = {};        // cache local por mes: { 'YYYY-MM': {...} }
+let liquidaciones = {};  // cache local por mes: { 'YYYY-MM': {...}|null }
+let feriadosCache = {};  // cache local por año: { '2026': [...] }
+let appIniciada = false;
+
+const hoy = new Date();
+let estado = { year: hoy.getFullYear(), mIdx: hoy.getMonth() };
+
+/* ============ FIRESTORE: EMPLEADOS ============ */
+async function loadEmpleados(){
+  const doc = await db.collection(COL.empleados).doc('lista').get();
+  if(doc.exists && doc.data().items && doc.data().items.length){
+    empleados = doc.data().items;
+  } else {
+    empleados = seedEmpleados();
+    await saveEmpleados();
+  }
+}
+async function saveEmpleados(){
+  await db.collection(COL.empleados).doc('lista').set({items: empleados});
+}
+
+/* ============ FIRESTORE: DATOS MENSUALES ============ */
+async function ensureMesLoaded(key){
+  if(mensual[key]) return;
+  const doc = await db.collection(COL.mensual).doc(key).get();
+  mensual[key] = doc.exists ? doc.data() : {};
+}
+async function saveMensualKey(key){
+  await db.collection(COL.mensual).doc(key).set(mensual[key] || {});
+}
+function getMesKey(){ return ym(estado.year, estado.mIdx); }
+function getDatosMes(){
+  const k = getMesKey();
+  if(!mensual[k]) mensual[k] = {};
+  empleados.forEach(e=>{
+    if(!mensual[k][e.id]){
+      mensual[k][e.id] = { horasReales:0, ausJustificadas:0, ausInjustificadas:0, feriados:{}, infracciones:[], cuentaCorriente:0 };
+    }
+  });
+  return mensual[k];
+}
+
+/* ============ FIRESTORE: LIQUIDACIONES ============ */
+async function ensureLiquidacionLoaded(key){
+  if(liquidaciones[key] !== undefined) return;
+  const doc = await db.collection(COL.liquidaciones).doc(key).get();
+  liquidaciones[key] = doc.exists ? doc.data() : null;
+}
+async function saveLiquidacionKey(key){
+  if(liquidaciones[key]){
+    await db.collection(COL.liquidaciones).doc(key).set(liquidaciones[key]);
+  } else {
+    await db.collection(COL.liquidaciones).doc(key).delete();
+  }
+}
+function mesAprobado(key){ return !!(liquidaciones[key] && liquidaciones[key].aprobado); }
+
+/* ============ CALCULO ============ */
+function daysInMonth(y,mIdx){ return new Date(y, mIdx+1, 0).getDate(); }
+
+function horasContractualesMes(esquema, y, mIdx){
+  let horas=0, dias=0;
+  const dim = daysInMonth(y,mIdx);
+  for(let d=1; d<=dim; d++){
+    const wd = new Date(y, mIdx, d).getDay();
+    const h = esquema[wd] || 0;
+    if(h>0){ horas+=h; dias++; }
+  }
+  return {horas, dias};
+}
+
+function calcularX(infracciones){
+  const sorted = [...infracciones].sort((a,b)=> a.fecha.localeCompare(b.fecha));
+  const usedWeeks = new Set();
+  let free=0, X=0;
+  const detalle=[];
+  sorted.forEach(inf=>{
+    const day = parseInt(inf.fecha.slice(8,10),10);
+    const week = Math.ceil(day/7);
+    if(free<4 && !usedWeeks.has(week)){
+      free++; usedWeeks.add(week);
+      detalle.push(Object.assign({}, inf, {esX:false}));
+    } else {
+      X++;
+      detalle.push(Object.assign({}, inf, {esX:true}));
+    }
+  });
+  return {X, detalle};
+}
+
+function calcularEmpleadoMes(emp, datosEmp, y, mIdx, feriadosDelMes){
+  const {horas: horasContractuales, dias: diasLaborables} = horasContractualesMes(emp.esquema, y, mIdx);
+  const valorHora = horasContractuales>0 ? emp.sueldoBase/horasContractuales : 0;
+  const valorDia = diasLaborables>0 ? emp.sueldoBase/diasLaborables : 0;
+  const horasReales = (datosEmp && datosEmp.horasReales) || 0;
+  const horasExtra = Math.max(0, horasReales - horasContractuales);
+  const montoExtra = horasExtra * valorHora * 2;
+
+  let montoFeriados = 0;
+  const detalleFeriados = [];
+  (feriadosDelMes||[]).forEach(f=>{
+    const info = datosEmp && datosEmp.feriados ? datosEmp.feriados[f.date] : null;
+    const trabajadas = (info && info.horas) || 0;
+    if(trabajadas>0){
+      const wd = new Date(f.date+'T00:00:00').getDay();
+      const contratadas = emp.esquema[wd] || 0;
+      const base = Math.min(trabajadas, contratadas);
+      const extra = Math.max(0, trabajadas - contratadas);
+      const bonus = base*valorHora*1 + extra*valorHora*2;
+      montoFeriados += bonus;
+      detalleFeriados.push({fecha:f.date, nombre:f.localName||f.name||'Feriado', trabajadas, contratadas, bonus});
+    }
+  });
+
+  const ausJustificadas = (datosEmp && datosEmp.ausJustificadas) || 0;
+  const ausInjustificadas = (datosEmp && datosEmp.ausInjustificadas) || 0;
+  const montoAusencias = ausInjustificadas * valorDia;
+
+  const infracciones = (datosEmp && datosEmp.infracciones) || [];
+  const {X, detalle: detalleInfracciones} = calcularX(infracciones);
+  const bono = X===0 ? emp.bonoBase*2 : Math.max(0, emp.bonoBase - 5000*X);
+
+  const cuentaCorriente = (datosEmp && datosEmp.cuentaCorriente) || 0;
+  const totalNeto = emp.sueldoBase + montoExtra + montoFeriados - montoAusencias + bono - cuentaCorriente;
+
+  return {
+    emp, horasContractuales, diasLaborables, valorHora, valorDia,
+    horasReales, horasExtra, montoExtra,
+    montoFeriados, detalleFeriados,
+    ausJustificadas, ausInjustificadas, montoAusencias,
+    infracciones, detalleInfracciones, X,
+    bonoBase: emp.bonoBase, bono,
+    cuentaCorriente, totalNeto
+  };
+}
+
+function calcularLiquidacionMes(y, mIdx, feriadosDelMes){
+  const datosMes = getDatosMes();
+  return empleados.map(emp => calcularEmpleadoMes(emp, datosMes[emp.id], y, mIdx, feriadosDelMes));
+}
+
+/* ============ FERIADOS API (con cache en Firestore) ============ */
+async function getFeriadosAnio(year){
+  if(feriadosCache[year]) return feriadosCache[year];
+  try{
+    const doc = await db.collection(COL.feriados).doc(String(year)).get();
+    if(doc.exists && doc.data().data){
+      feriadosCache[year] = doc.data().data;
+      return feriadosCache[year];
+    }
+  }catch(e){ /* seguimos con la API */ }
+  try{
+    const res = await fetch('https://date.nager.at/api/v3/PublicHolidays/' + year + '/AR');
+    if(!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    feriadosCache[year] = data;
+    db.collection(COL.feriados).doc(String(year)).set({data}).catch(()=>{});
+    return data;
+  }catch(e){
+    return null;
+  }
+}
+function feriadosDelMesActual(anioData){
+  if(!anioData) return [];
+  const mesStr = String(estado.mIdx+1).padStart(2,'0');
+  return anioData.filter(f => f.date.slice(5,7) === mesStr && f.date.slice(0,4) === String(estado.year));
+}
+
+/* ============ NAV ============ */
+function switchView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.view===name));
+  if(name==='config') renderConfig();
+  if(name==='carga') renderCarga();
+  if(name==='liquidacion') renderLiquidacion();
+  if(name==='recibo') renderReciboSelectors();
+}
+document.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=> switchView(t.dataset.view)));
+
+document.getElementById('btn-info').addEventListener('click', ()=>{
+  const p = document.getElementById('info-panel');
+  p.style.display = p.style.display==='none' ? 'block' : 'none';
+});
+
+/* selectores mes/año globales */
+function initSelectoresMes(){
+  const selMes = document.getElementById('sel-mes');
+  const selAnio = document.getElementById('sel-anio');
+  selMes.innerHTML = MESES.map((m,i)=>'<option value="'+i+'">'+m+'</option>').join('');
+  selMes.value = estado.mIdx;
+  const anioActual = hoy.getFullYear();
+  let opts = '';
+  for(let a=anioActual-1; a<=anioActual+1; a++){ opts += '<option value="'+a+'">'+a+'</option>'; }
+  selAnio.innerHTML = opts;
+  selAnio.value = estado.year;
+  selMes.addEventListener('change', ()=>{ estado.mIdx = parseInt(selMes.value,10); onMesChange(); });
+  selAnio.addEventListener('change', ()=>{ estado.year = parseInt(selAnio.value,10); onMesChange(); });
+}
+function onMesChange(){
+  const active = document.querySelector('.view.active').id.replace('view-','');
+  if(active==='carga') renderCarga();
+  if(active==='liquidacion') renderLiquidacion();
+  if(active==='recibo') renderReciboSelectors();
+}
+
+/* ============ VISTA CONFIG ============ */
+function renderConfig(){
+  const cont = document.getElementById('emp-list');
+  cont.innerHTML = empleados.map(emp=>{
+    const {horas} = horasContractualesMes(emp.esquema, estado.year, estado.mIdx);
+    const horasSemana = emp.esquema.reduce((a,b)=>a+b,0);
+    return '<div class="empcard" data-id="'+emp.id+'">'
+      + '<div class="row" style="justify-content:space-between;">'
+      + '<h3>'+emp.nombre+' <span class="muted">('+emp.codigo+')</span></h3>'
+      + '<button class="close-x" data-action="del-emp" data-id="'+emp.id+'">✕ eliminar</button>'
+      + '</div>'
+      + '<div class="row">'
+      + campoInput('Nombre','text','nombre',emp.id,emp.nombre)
+      + campoInput('Código','text','codigo',emp.id,emp.codigo)
+      + campoInput('Sueldo base ($)','number','sueldoBase',emp.id,emp.sueldoBase)
+      + campoInput('Bono base ($)','number','bonoBase',emp.id,emp.bonoBase)
+      + '</div>'
+      + '<label style="margin-top:10px;">Esquema semanal (horas por día, 0 = franco)</label>'
+      + '<div class="grid7">' + DIAS_SEMANA.map((d,i)=>{
+          return '<div class="daybox"><label>'+d+'</label><input type="number" min="0" max="14" style="width:100%" data-action="esq" data-id="'+emp.id+'" data-idx="'+i+'" value="'+emp.esquema[i]+'"></div>';
+        }).join('') + '</div>'
+      + '<p class="muted" style="margin-top:8px;">Horas/semana: '+horasSemana+' &nbsp;|&nbsp; Horas contractuales de '+MESES[estado.mIdx]+' '+estado.year+': '+horas+'</p>'
+      + '</div>';
+  }).join('') || '<p class="muted">No hay empleados cargados.</p>';
+}
+function campoInput(label,type,field,id,value){
+  return '<div><label>'+label+'</label><input type="'+type+'" data-action="campo" data-field="'+field+'" data-id="'+id+'" value="'+value+'" style="'+(type==='text'?'width:140px':'')+'"></div>';
+}
+document.getElementById('emp-list').addEventListener('input', e=>{
+  const t = e.target;
+  const id = t.dataset.id;
+  const emp = empleados.find(x=>x.id===id);
+  if(!emp) return;
+  if(t.dataset.action==='campo'){
+    const f = t.dataset.field;
+    emp[f] = (f==='sueldoBase'||f==='bonoBase') ? (parseFloat(t.value)||0) : t.value;
+  } else if(t.dataset.action==='esq'){
+    emp.esquema[parseInt(t.dataset.idx,10)] = parseFloat(t.value)||0;
+  }
+  saveEmpleados().catch(console.error);
+});
+document.getElementById('emp-list').addEventListener('click', e=>{
+  const t = e.target;
+  if(t.dataset.action==='del-emp'){
+    if(confirm('¿Eliminar a este empleado? Esta acción no borra los datos mensuales ya cargados.')){
+      empleados = empleados.filter(x=>x.id!==t.dataset.id);
+      saveEmpleados().catch(console.error);
+      renderConfig();
+    }
+  }
+});
+document.getElementById('btn-add-emp').addEventListener('click', ()=>{
+  empleados.push({id:uid(), codigo:'NEW', nombre:'Nuevo empleado', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)});
+  saveEmpleados().catch(console.error);
+  renderConfig();
+});
+
+/* ============ VISTA CARGA MENSUAL ============ */
+let feriadosAnioActual = null;
+async function renderCarga(){
+  const key = getMesKey();
+  await ensureMesLoaded(key);
+  const info = document.getElementById('feriados-info');
+  info.textContent = 'Cargando feriados de ' + estado.year + '...';
+  feriadosAnioActual = await getFeriadosAnio(estado.year);
+  const feriadosMes = feriadosDelMesActual(feriadosAnioActual);
+  if(feriadosAnioActual===null){
+    info.innerHTML = '<span class="pill warn">Sin conexión</span> No se pudieron cargar los feriados desde la API. Revisá la conexión a internet.';
+  } else if(feriadosMes.length===0){
+    info.textContent = 'No hay feriados nacionales en ' + MESES[estado.mIdx] + ' ' + estado.year + '.';
+  } else {
+    info.innerHTML = feriadosMes.map(f=> '<span class="pill info">'+f.date+' — '+(f.localName||f.name)+'</span>').join(' ');
+  }
+  await ensureLiquidacionLoaded(key);
+  renderCargaLista(feriadosMes);
+}
+function renderCargaLista(feriadosMes){
+  const datosMes = getDatosMes();
+  const key = getMesKey();
+  const bloqueado = mesAprobado(key);
+  const cont = document.getElementById('carga-list');
+  cont.innerHTML = empleados.map(emp=>{
+    const d = datosMes[emp.id];
+    const dis = bloqueado ? 'disabled' : '';
+    const feriadosHtml = feriadosMes.length ? feriadosMes.map(f=>{
+      const info = d.feriados[f.date] || {horas:0};
+      const wd = new Date(f.date+'T00:00:00').getDay();
+      const contratadas = emp.esquema[wd]||0;
+      return '<div class="row" style="margin-bottom:4px;">'
+        + '<span style="width:170px;font-size:12px;">'+f.date+' '+(f.localName||f.name)+' <span class="muted">(carga: '+contratadas+'hs)</span></span>'
+        + '<input type="number" min="0" max="24" '+dis+' data-action="feriado" data-id="'+emp.id+'" data-fecha="'+f.date+'" value="'+info.horas+'" placeholder="hs trabajadas">'
+        + '</div>';
+    }).join('') : '<p class="muted">Sin feriados este mes.</p>';
+
+    const infraccionesHtml = (d.infracciones||[]).slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(inf=>{
+      return '<div class="infra-item" data-infid="'+inf.id+'">'
+        + '<span>'+inf.fecha+' — '+TIPOS_INFRACCION[inf.tipo]+'</span>'
+        + (bloqueado ? '' : '<button class="close-x" data-action="del-infra" data-id="'+emp.id+'" data-infid="'+inf.id+'">✕</button>')
+        + '</div>';
+    }).join('') || '<p class="muted">Sin infracciones cargadas.</p>';
+
+    return '<div class="empcard">'
+      + '<h3>'+emp.nombre+' <span class="muted">('+emp.codigo+')</span></h3>'
+      + '<div class="row">'
+      + '<div><label>Horas reales trabajadas</label><input type="number" min="0" '+dis+' data-action="horasReales" data-id="'+emp.id+'" value="'+d.horasReales+'"></div>'
+      + '<div><label>Ausencias justificadas (días)</label><input type="number" min="0" '+dis+' data-action="ausJustificadas" data-id="'+emp.id+'" value="'+d.ausJustificadas+'"></div>'
+      + '<div><label>Ausencias injustificadas (días)</label><input type="number" min="0" '+dis+' data-action="ausInjustificadas" data-id="'+emp.id+'" value="'+d.ausInjustificadas+'"></div>'
+      + '<div><label>Cuenta corriente ($)</label><input type="number" min="0" '+dis+' data-action="cuentaCorriente" data-id="'+emp.id+'" value="'+d.cuentaCorriente+'"></div>'
+      + '</div>'
+      + '<label style="margin-top:10px;">Feriados del mes</label>'
+      + feriadosHtml
+      + '<label style="margin-top:10px;">Infracciones</label>'
+      + infraccionesHtml
+      + (bloqueado ? '' : ('<div class="row" style="margin-top:6px;">'
+        + '<input type="date" data-newinfra-fecha="'+emp.id+'">'
+        + '<select data-newinfra-tipo="'+emp.id+'">' + TIPOS_INFRACCION.map((t,i)=>'<option value="'+i+'">'+t+'</option>').join('') + '</select>'
+        + '<button class="secondary" data-action="add-infra" data-id="'+emp.id+'">+ Agregar infracción</button>'
+        + '</div>'))
+      + '</div>';
+  }).join('');
+}
+document.getElementById('carga-list').addEventListener('input', e=>{
+  const t = e.target;
+  const id = t.dataset.id;
+  if(!id) return;
+  const datosMes = getDatosMes();
+  const d = datosMes[id];
+  if(!d) return;
+  if(t.dataset.action==='horasReales') d.horasReales = parseFloat(t.value)||0;
+  else if(t.dataset.action==='ausJustificadas') d.ausJustificadas = parseFloat(t.value)||0;
+  else if(t.dataset.action==='ausInjustificadas') d.ausInjustificadas = parseFloat(t.value)||0;
+  else if(t.dataset.action==='cuentaCorriente') d.cuentaCorriente = parseFloat(t.value)||0;
+  else if(t.dataset.action==='feriado'){
+    const fecha = t.dataset.fecha;
+    d.feriados[fecha] = { horas: parseFloat(t.value)||0 };
+  } else return;
+  saveMensualKey(getMesKey()).catch(console.error);
+});
+document.getElementById('carga-list').addEventListener('click', e=>{
+  const t = e.target;
+  if(t.dataset.action==='add-infra'){
+    const id = t.dataset.id;
+    const fechaInput = document.querySelector('[data-newinfra-fecha="'+id+'"]');
+    const tipoInput = document.querySelector('[data-newinfra-tipo="'+id+'"]');
+    if(!fechaInput.value){ alert('Elegí una fecha para la infracción.'); return; }
+    const datosMes = getDatosMes();
+    const d = datosMes[id];
+    d.infracciones = d.infracciones || [];
+    d.infracciones.push({ id: uid(), fecha: fechaInput.value, tipo: parseInt(tipoInput.value,10) });
+    saveMensualKey(getMesKey()).catch(console.error);
+    renderCarga();
+  } else if(t.dataset.action==='del-infra'){
+    const id = t.dataset.id;
+    const infid = t.dataset.infid;
+    const datosMes = getDatosMes();
+    const d = datosMes[id];
+    d.infracciones = (d.infracciones||[]).filter(x=>x.id!==infid);
+    saveMensualKey(getMesKey()).catch(console.error);
+    renderCarga();
+  }
+});
+
+/* ============ VISTA LIQUIDACION ============ */
+async function renderLiquidacion(){
+  const key = getMesKey();
+  await ensureMesLoaded(key);
+  await ensureLiquidacionLoaded(key);
+  feriadosAnioActual = await getFeriadosAnio(estado.year);
+  const feriadosMes = feriadosDelMesActual(feriadosAnioActual);
+  const resultados = calcularLiquidacionMes(estado.year, estado.mIdx, feriadosMes);
+  const bloqueado = mesAprobado(key);
+  document.getElementById('liq-estado').textContent = bloqueado ? 'Aprobada' : 'Borrador';
+  document.getElementById('liq-estado').className = 'pill ' + (bloqueado ? 'ok' : 'info');
+  document.getElementById('btn-aprobar').style.display = bloqueado ? 'none' : 'inline-block';
+  document.getElementById('btn-reabrir').style.display = bloqueado ? 'inline-block' : 'none';
+
+  const body = document.getElementById('liq-body');
+  body.innerHTML = resultados.map(r=>{
+    return '<tr>'
+      + '<td>'+r.emp.codigo+'</td>'
+      + '<td>'+r.emp.nombre+'</td>'
+      + '<td class="num">'+fmtMoney(r.emp.sueldoBase)+'</td>'
+      + '<td class="num">'+r.horasExtra.toFixed(1)+'</td>'
+      + '<td class="num pos">'+fmtMoney(r.montoExtra)+'</td>'
+      + '<td class="num pos">'+fmtMoney(r.montoFeriados)+'</td>'
+      + '<td class="num">'+r.ausInjustificadas+'</td>'
+      + '<td class="num neg">-'+fmtMoney(r.montoAusencias)+'</td>'
+      + '<td class="num pos">'+fmtMoney(r.bono)+'</td>'
+      + '<td class="num">'+(r.X>0 ? '<span class="pill warn">'+r.X+'</span>' : '<span class="pill ok">0</span>')+'</td>'
+      + '<td class="num neg">-'+fmtMoney(r.cuentaCorriente)+'</td>'
+      + '<td class="num" style="font-weight:800;color:var(--gold)">'+fmtMoney(r.totalNeto)+'</td>'
+      + '</tr>';
+  }).join('');
+
+  window._ultimaLiquidacion = { key, resultados, feriadosMes };
+  return window._ultimaLiquidacion;
+}
+document.getElementById('btn-recalcular').addEventListener('click', renderLiquidacion);
+document.getElementById('btn-aprobar').addEventListener('click', async ()=>{
+  const key = getMesKey();
+  if(!confirm('¿Aprobar la liquidación de ' + MESES[estado.mIdx] + ' ' + estado.year + '? Quedará bloqueada para edición.')) return;
+  await renderLiquidacion();
+  liquidaciones[key] = { aprobado:true, fecha: new Date().toISOString(), snapshot: window._ultimaLiquidacion.resultados };
+  await saveLiquidacionKey(key);
+  renderLiquidacion();
+});
+document.getElementById('btn-reabrir').addEventListener('click', async ()=>{
+  const key = getMesKey();
+  if(!confirm('¿Reabrir esta liquidación para editar la carga mensual?')) return;
+  liquidaciones[key] = null;
+  await saveLiquidacionKey(key);
+  renderLiquidacion();
+});
+document.getElementById('btn-export-excel').addEventListener('click', async ()=>{
+  await renderLiquidacion();
+  const { resultados } = window._ultimaLiquidacion;
+  const wb = XLSX.utils.book_new();
+
+  const resumenRows = [['Código','Nombre','Sueldo Base','Hs Extra','Monto Extra','Feriados ($)','Aus. Injust. (días)','Desc. Ausencias','Bono Base','X','Bono Final','Cta. Cte.','Total Neto']];
+  resultados.forEach(r=>{
+    resumenRows.push([r.emp.codigo, r.emp.nombre, r.emp.sueldoBase, r.horasExtra, Math.round(r.montoExtra), Math.round(r.montoFeriados), r.ausInjustificadas, Math.round(r.montoAusencias), r.bonoBase, r.X, Math.round(r.bono), r.cuentaCorriente, Math.round(r.totalNeto)]);
+  });
+  const ws1 = XLSX.utils.aoa_to_sheet(resumenRows);
+  XLSX.utils.book_append_sheet(wb, ws1, 'Resumen');
+
+  const infraRows = [['Código','Nombre','Fecha','Tipo de infracción','¿Es X?']];
+  resultados.forEach(r=>{
+    r.detalleInfracciones.forEach(inf=>{
+      infraRows.push([r.emp.codigo, r.emp.nombre, inf.fecha, TIPOS_INFRACCION[inf.tipo], inf.esX ? 'Sí' : 'No']);
+    });
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(infraRows);
+  XLSX.utils.book_append_sheet(wb, ws2, 'Infracciones');
+
+  const detRows = [['Código','Nombre','Hs Contractuales','Hs Reales','Hs Extra','Valor Hora']];
+  resultados.forEach(r=>{
+    detRows.push([r.emp.codigo, r.emp.nombre, r.horasContractuales, r.horasReales, r.horasExtra, Math.round(r.valorHora)]);
+  });
+  detRows.push([]);
+  detRows.push(['Código','Nombre','Fecha Feriado','Nombre Feriado','Hs Trabajadas','Hs Carga Habitual','Bono Feriado']);
+  resultados.forEach(r=>{
+    r.detalleFeriados.forEach(f=>{
+      detRows.push([r.emp.codigo, r.emp.nombre, f.fecha, f.nombre, f.trabajadas, f.contratadas, Math.round(f.bonus)]);
+    });
+  });
+  const ws3 = XLSX.utils.aoa_to_sheet(detRows);
+  XLSX.utils.book_append_sheet(wb, ws3, 'Horas Extra y Feriados');
+
+  XLSX.writeFile(wb, 'Liquidacion_Amapola_' + ym(estado.year, estado.mIdx) + '.xlsx');
+});
+
+/* ============ VISTA RECIBO ============ */
+function renderReciboSelectors(){
+  const sel = document.getElementById('recibo-emp');
+  sel.innerHTML = empleados.map(e=>'<option value="'+e.id+'">'+e.nombre+' ('+e.codigo+')</option>').join('');
+  sel.onchange = renderRecibo;
+  renderRecibo();
+}
+async function renderRecibo(){
+  const sel = document.getElementById('recibo-emp');
+  const emp = empleados.find(e=>e.id===sel.value);
+  const cont = document.getElementById('recibo-render');
+  if(!emp){ cont.innerHTML=''; return; }
+  const key = getMesKey();
+  await ensureMesLoaded(key);
+  feriadosAnioActual = await getFeriadosAnio(estado.year);
+  const feriadosMes = feriadosDelMesActual(feriadosAnioActual);
+  const datosMes = getDatosMes();
+  const r = calcularEmpleadoMes(emp, datosMes[emp.id], estado.year, estado.mIdx, feriadosMes);
+  cont.innerHTML = '<div class="recibo-box" id="recibo-print">'
+    + '<h2>Amapola Resto</h2>'
+    + '<p><strong>'+MESES[estado.mIdx]+' '+estado.year+'</strong><br>Empleado: '+emp.nombre+' ('+emp.codigo+')</p>'
+    + '<div class="recibo-line"><span>Sueldo base</span><span>'+fmtMoney(emp.sueldoBase)+'</span></div>'
+    + '<div class="recibo-line"><span>Horas extra ('+r.horasExtra.toFixed(1)+' hs)</span><span>+'+fmtMoney(r.montoExtra)+'</span></div>'
+    + '<div class="recibo-line"><span>Feriados trabajados</span><span>+'+fmtMoney(r.montoFeriados)+'</span></div>'
+    + '<div class="recibo-line"><span>Ausencias injustificadas ('+r.ausInjustificadas+' días)</span><span>-'+fmtMoney(r.montoAusencias)+'</span></div>'
+    + '<div class="recibo-line"><span>Bono ('+r.X+' X)</span><span>+'+fmtMoney(r.bono)+'</span></div>'
+    + '<div class="recibo-line"><span>Cuenta corriente</span><span>-'+fmtMoney(r.cuentaCorriente)+'</span></div>'
+    + '<div class="recibo-total"><span>TOTAL NETO</span><span>'+fmtMoney(r.totalNeto)+'</span></div>'
+    + '</div>';
+}
+document.getElementById('btn-imprimir').addEventListener('click', ()=>{
+  document.getElementById('view-recibo').classList.add('print-active');
+  window.print();
+  setTimeout(()=> document.getElementById('view-recibo').classList.remove('print-active'), 500);
+});
+
+/* ============ BACKUP (lee/escribe Firestore) ============ */
+document.getElementById('btn-export-json').addEventListener('click', async ()=>{
+  const backup = { empleados: empleados, mensual: {}, liquidaciones: {}, feriados: {}, exportadoEl: new Date().toISOString() };
+  const mensualSnap = await db.collection(COL.mensual).get();
+  mensualSnap.forEach(d=> backup.mensual[d.id] = d.data());
+  const liqSnap = await db.collection(COL.liquidaciones).get();
+  liqSnap.forEach(d=> backup.liquidaciones[d.id] = d.data());
+  const ferSnap = await db.collection(COL.feriados).get();
+  ferSnap.forEach(d=> backup.feriados[d.id] = d.data().data);
+
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'amapola_sueldos_backup_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('btn-import-json').addEventListener('click', ()=> document.getElementById('file-import-json').click());
+document.getElementById('file-import-json').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async ()=>{
+    try{
+      const data = JSON.parse(reader.result);
+      if(!confirm('Esto va a reemplazar todos los datos actuales por los del backup. ¿Continuar?')) return;
+      if(data.empleados){ empleados = data.empleados; await saveEmpleados(); }
+      if(data.mensual){ for(const k in data.mensual){ await db.collection(COL.mensual).doc(k).set(data.mensual[k]); } }
+      if(data.liquidaciones){ for(const k in data.liquidaciones){ await db.collection(COL.liquidaciones).doc(k).set(data.liquidaciones[k]); } }
+      if(data.feriados){ for(const k in data.feriados){ await db.collection(COL.feriados).doc(k).set({data:data.feriados[k]}); } }
+      alert('Backup importado. La página se va a recargar.');
+      location.reload();
+    }catch(err){
+      alert('El archivo no es un backup válido: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+});
+
+/* ============ AUTENTICACIÓN ============ */
+function showApp(){
+  document.getElementById('login-overlay').style.display = 'none';
+  document.getElementById('app-root').style.display = '';
+}
+function showLogin(){
+  document.getElementById('login-overlay').style.display = 'flex';
+  document.getElementById('app-root').style.display = 'none';
+}
+auth.onAuthStateChanged(async user=>{
+  if(user){
+    showApp();
+    if(!appIniciada){
+      appIniciada = true;
+      await loadEmpleados();
+      initSelectoresMes();
+      switchView('config');
+    }
+  } else {
+    appIniciada = false;
+    showLogin();
+  }
+});
+document.getElementById('btn-login').addEventListener('click', async ()=>{
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if(!email || !pass){ errEl.textContent='Completá usuario y contraseña.'; errEl.style.display='block'; return; }
+  try{
+    await auth.signInWithEmailAndPassword(email, pass);
+  }catch(e){
+    errEl.textContent = 'Usuario o contraseña incorrectos.';
+    errEl.style.display = 'block';
+  }
+});
+document.getElementById('login-pass').addEventListener('keydown', e=>{
+  if(e.key==='Enter') document.getElementById('btn-login').click();
+});
+document.getElementById('btn-logout').addEventListener('click', ()=> auth.signOut());
+</script>
+</body>
+</html>
