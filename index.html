@@ -127,6 +127,7 @@
   • Bono: margen de 4 infracciones "gratis" en el mes, máximo 1 por semana (semana = tramo de 7 días del mes: 1-7, 8-14, etc). La 2ª infracción de una misma semana ya es X, aunque no se llegue a 4 en el mes. Cada X descuenta $5.000 del bono (piso $0). Con 0 X, el bono se paga al doble.<br>
   • Los datos de este módulo viven en la nube (Firebase), en colecciones separadas de la app de fichaje de la tablet, para no interferir con ella.<br>
   • "Horas reales trabajadas" se autocompleta sumando los turnos de la app de fichajes (colección "jornadas") para ese empleado y ese mes, la primera vez que el campo está en 0. Siempre se puede editar a mano; una vez que tiene un valor manual, no se vuelve a pisar solo. Al lado del campo se muestra el total que reporta fichajes y un botón "usar" para volver a copiarlo si hace falta.<br>
+  • Mica y Mike hacen turno partido y fichan su turno tarde como "Mica.pm" y "Mike.pm" en la app de la tablet; esas horas se suman automáticamente a las de Mica y Mike respectivamente.<br>
   • Estas reglas son una interpretación de la consigna original; si algo no coincide con el reglamento real, se ajusta fácilmente en el código (buscar la función <code>calcularEmpleadoMes</code> y <code>calcularX</code>).
   </p>
 </div>
@@ -448,23 +449,29 @@ function feriadosDelMesActual(anioData){
 /* ============ FICHAJES (app de la tablet, colección "jornadas") ============ */
 // Trae los turnos de un empleado (por nombre exacto) y suma las horas del mes elegido.
 // Lee de la colección "jornadas" de la app de fichaje (misma base de Firebase, distinta colección).
+// Algunos empleados hacen turno partido y quedan registrados en fichajes con un nombre
+// complementario (ej. "Mica.pm", "Mike.pm"); esas horas se suman al total de la persona.
+const COMPLEMENTOS_FICHAJE = { 'Mica': ['Mica.pm'], 'Mike': ['Mike.pm'] };
 const fichajeCache = {}; // cache en memoria: 'Nombre|2026-07' -> horas
 async function getHorasFichajeMes(nombreEmpleado, year, mIdx){
   const key = nombreEmpleado + '|' + ym(year, mIdx);
   if(fichajeCache[key] !== undefined) return fichajeCache[key];
   const mesPrefix = ym(year, mIdx); // 'YYYY-MM'
+  const nombres = [nombreEmpleado].concat(COMPLEMENTOS_FICHAJE[nombreEmpleado] || []);
   let totalHoras = 0;
   try{
-    const snap = await db.collection('jornadas').where('empleado', '==', nombreEmpleado).get();
-    snap.forEach(doc=>{
-      const d = doc.data();
-      if(d.fecha && d.fecha.slice(0,7) === mesPrefix && d.inicio && d.fin){
-        const ini = new Date(d.inicio);
-        const fin = new Date(d.fin);
-        const horas = (fin - ini) / (1000*60*60);
-        if(horas > 0 && horas < 24) totalHoras += horas;
-      }
-    });
+    for(const nom of nombres){
+      const snap = await db.collection('jornadas').where('empleado', '==', nom).get();
+      snap.forEach(doc=>{
+        const d = doc.data();
+        if(d.fecha && d.fecha.slice(0,7) === mesPrefix && d.inicio && d.fin){
+          const ini = new Date(d.inicio);
+          const fin = new Date(d.fin);
+          const horas = (fin - ini) / (1000*60*60);
+          if(horas > 0 && horas < 24) totalHoras += horas;
+        }
+      });
+    }
   }catch(e){
     totalHoras = null; // sin acceso o sin datos
   }
@@ -610,7 +617,7 @@ function renderCargaLista(feriadosMes, fichajeMap){
     const horasFichaje = fichajeMap ? fichajeMap[emp.id] : undefined;
     const fichajeTexto = horasFichaje===null ? 'no se pudo leer fichajes'
       : horasFichaje===undefined ? 'calculando...'
-      : horasFichaje.toFixed(1) + ' hs según fichajes';
+      : horasFichaje.toFixed(1) + ' hs según fichajes' + (COMPLEMENTOS_FICHAJE[emp.nombre] ? ' (incluye turno partido)' : '');
     const feriadosHtml = feriadosMes.length ? feriadosMes.map(f=>{
       const info = d.feriados[f.date] || {horas:0};
       const wd = new Date(f.date+'T00:00:00').getDay();
