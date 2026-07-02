@@ -119,15 +119,17 @@
 <div id="info-panel" class="card no-print" style="margin:14px 20px;">
   <h2>Reglas de cálculo aplicadas</h2>
   <p class="muted">
-  • Horas contractuales mensuales: se calculan con el calendario real del mes (se cuentan los días efectivos de cada mes según el esquema semanal de cada empleado, no un promedio fijo).<br>
-  • Valor hora = sueldo base ÷ horas contractuales del mes. Valor día = sueldo base ÷ días laborables del mes. Ambos varían mes a mes.<br>
-  • Horas extra = horas reales trabajadas − horas contractuales del mes (si es positivo), pagadas al doble del valor hora.<br>
+  • Valor hora = sueldo base ÷ horas promedio mensuales FIJAS de ese empleado (horas de su semana × 52 ÷ 12). Para alguien de 48 hs/semana da 208 hs siempre, sin importar el mes. Este número no cambia mes a mes, así el valor hora es estable.<br>
+  • Horas contractuales del mes (calendario real): se siguen calculando contando los días efectivos de cada mes según el esquema semanal, pero ahora se usan sólo como umbral para saber a partir de qué cantidad de horas reales empieza a haber hora extra — no para el valor hora.<br>
+  • Valor día = sueldo base ÷ días laborables del mes (calendario real, sin cambios).<br>
+  • Horas extra = horas reales trabajadas − horas contractuales del mes según calendario (si es positivo), pagadas al doble del valor hora fijo.<br>
   • Feriado trabajado: por cada feriado, se compara lo trabajado contra la carga horaria normal de ese empleado para ese día de la semana. Las horas dentro de su carga habitual se pagan con un plus de 1x valor hora (quedan "al doble"). Las horas que superan su carga habitual ese día se pagan con un plus de 2x valor hora (quedan a 4x en total: normal + extra + extra doblada por feriado).<br>
   • Ausencia injustificada: descuenta 1 valor día completo por cada día. Ausencia justificada: sin descuento.<br>
   • Bono: margen de 4 infracciones "gratis" en el mes, máximo 1 por semana (semana = tramo de 7 días del mes: 1-7, 8-14, etc). La 2ª infracción de una misma semana ya es X, aunque no se llegue a 4 en el mes. Cada X descuenta $5.000 del bono (piso $0). Con 0 X, el bono se paga al doble.<br>
   • Los datos de este módulo viven en la nube (Firebase), en colecciones separadas de la app de fichaje de la tablet, para no interferir con ella.<br>
   • "Horas reales trabajadas" se autocompleta sumando los turnos de la app de fichajes (colección "jornadas") para ese empleado y ese mes, la primera vez que el campo está en 0. Siempre se puede editar a mano; una vez que tiene un valor manual, no se vuelve a pisar solo. Al lado del campo se muestra el total que reporta fichajes y un botón "usar" para volver a copiarlo si hace falta.<br>
   • Mica y Mike hacen turno partido y fichan su turno tarde como "Mica.pm" y "Mike.pm" en la app de la tablet; esas horas se suman automáticamente a las de Mica y Mike respectivamente.<br>
+  • En Carga Mensual, debajo del total de fichajes de cada empleado hay un desplegable "Ver detalle diario según fichajes" con las horas día por día que reporta la app de la tablet ese mes, para poder revisar antes de aprobar.<br>
   • Estas reglas son una interpretación de la consigna original; si algo no coincide con el reglamento real, se ajusta fácilmente en el código (buscar la función <code>calcularEmpleadoMes</code> y <code>calcularX</code>).
   </p>
 </div>
@@ -349,6 +351,15 @@ function horasContractualesMes(esquema, y, mIdx){
   return {horas, dias};
 }
 
+// Horas promedio mensuales FIJAS por empleado (no cambian mes a mes): horas de la semana x 52/12.
+// Para alguien de 48hs/semana da exactamente 208. Se usa sólo para fijar el valor hora (con qué
+// se "valúa" el sueldo base). El umbral de qué cuenta como hora extra sigue usando el calendario
+// real del mes (horasContractualesMes de arriba), tal como se venía calculando.
+function horasPromedioMensual(esquema){
+  const horasSemana = (esquema||[]).reduce((a,b)=>a+b,0);
+  return horasSemana * 52 / 12;
+}
+
 function calcularX(infracciones){
   const sorted = [...infracciones].sort((a,b)=> a.fecha.localeCompare(b.fecha));
   const usedWeeks = new Set();
@@ -370,7 +381,8 @@ function calcularX(infracciones){
 
 function calcularEmpleadoMes(emp, datosEmp, y, mIdx, feriadosDelMes){
   const {horas: horasContractuales, dias: diasLaborables} = horasContractualesMes(emp.esquema, y, mIdx);
-  const valorHora = horasContractuales>0 ? emp.sueldoBase/horasContractuales : 0;
+  const horasPromedio = horasPromedioMensual(emp.esquema);
+  const valorHora = horasPromedio>0 ? emp.sueldoBase/horasPromedio : 0;
   const valorDia = diasLaborables>0 ? emp.sueldoBase/diasLaborables : 0;
   const horasReales = (datosEmp && datosEmp.horasReales) || 0;
   const horasExtra = Math.max(0, horasReales - horasContractuales);
@@ -404,7 +416,7 @@ function calcularEmpleadoMes(emp, datosEmp, y, mIdx, feriadosDelMes){
   const totalNeto = emp.sueldoBase + montoExtra + montoFeriados - montoAusencias + bono - cuentaCorriente;
 
   return {
-    emp, horasContractuales, diasLaborables, valorHora, valorDia,
+    emp, horasContractuales, horasPromedio, diasLaborables, valorHora, valorDia,
     horasReales, horasExtra, montoExtra,
     montoFeriados, detalleFeriados,
     ausJustificadas, ausInjustificadas, montoAusencias,
@@ -479,6 +491,35 @@ async function getHorasFichajeMes(nombreEmpleado, year, mIdx){
   return totalHoras;
 }
 
+// Igual que getHorasFichajeMes pero devuelve el detalle día por día: { 'YYYY-MM-DD': horas, ... }
+const fichajeDiarioCache = {};
+async function getHorasFichajePorDia(nombreEmpleado, year, mIdx){
+  const key = nombreEmpleado + '|' + ym(year, mIdx);
+  if(fichajeDiarioCache[key] !== undefined) return fichajeDiarioCache[key];
+  const mesPrefix = ym(year, mIdx);
+  const nombres = [nombreEmpleado].concat(COMPLEMENTOS_FICHAJE[nombreEmpleado] || []);
+  const porDia = {};
+  try{
+    for(const nom of nombres){
+      const snap = await db.collection('jornadas').where('empleado', '==', nom).get();
+      snap.forEach(doc=>{
+        const d = doc.data();
+        if(d.fecha && d.fecha.slice(0,7) === mesPrefix && d.inicio && d.fin){
+          const ini = new Date(d.inicio);
+          const fin = new Date(d.fin);
+          const horas = (fin - ini) / (1000*60*60);
+          if(horas > 0 && horas < 24) porDia[d.fecha] = (porDia[d.fecha] || 0) + horas;
+        }
+      });
+    }
+  }catch(e){
+    fichajeDiarioCache[key] = null;
+    return null;
+  }
+  fichajeDiarioCache[key] = porDia;
+  return porDia;
+}
+
 /* ============ NAV ============ */
 function switchView(name){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -523,6 +564,7 @@ function renderConfig(){
   cont.innerHTML = empleados.map(emp=>{
     const {horas} = horasContractualesMes(emp.esquema, estado.year, estado.mIdx);
     const horasSemana = emp.esquema.reduce((a,b)=>a+b,0);
+    const horasPromedio = horasPromedioMensual(emp.esquema);
     return '<div class="empcard" data-id="'+emp.id+'">'
       + '<div class="row" style="justify-content:space-between;">'
       + '<h3>'+emp.nombre+' <span class="muted">('+emp.codigo+')</span></h3>'
@@ -538,7 +580,7 @@ function renderConfig(){
       + '<div class="grid7">' + DIAS_SEMANA.map((d,i)=>{
           return '<div class="daybox"><label>'+d+'</label><input type="number" min="0" max="14" style="width:100%" data-action="esq" data-id="'+emp.id+'" data-idx="'+i+'" value="'+emp.esquema[i]+'"></div>';
         }).join('') + '</div>'
-      + '<p class="muted" style="margin-top:8px;">Horas/semana: '+horasSemana+' &nbsp;|&nbsp; Horas contractuales de '+MESES[estado.mIdx]+' '+estado.year+': '+horas+'</p>'
+      + '<p class="muted" style="margin-top:8px;">Horas/semana: '+horasSemana+' &nbsp;|&nbsp; Horas promedio mensuales (fijas, valor hora): '+horasPromedio.toFixed(1)+' &nbsp;|&nbsp; Horas de '+MESES[estado.mIdx]+' '+estado.year+' (umbral hs extra): '+horas+'</p>'
       + '</div>';
   }).join('') || '<p class="muted">No hay empleados cargados.</p>';
 }
@@ -595,18 +637,23 @@ async function renderCarga(){
   // Traer horas de fichajes para cada empleado y autocompletar si el campo está en 0
   const datosMes = getDatosMes();
   const fichajeMap = {};
+  const fichajeDiarioMap = {};
   await Promise.all(empleados.map(async emp=>{
-    const horas = await getHorasFichajeMes(emp.nombre, estado.year, estado.mIdx);
+    const [horas, porDia] = await Promise.all([
+      getHorasFichajeMes(emp.nombre, estado.year, estado.mIdx),
+      getHorasFichajePorDia(emp.nombre, estado.year, estado.mIdx)
+    ]);
     fichajeMap[emp.id] = horas;
+    fichajeDiarioMap[emp.id] = porDia;
     if(!mesAprobado(key) && horas!==null && horas>0 && (datosMes[emp.id].horasReales||0)===0){
       datosMes[emp.id].horasReales = Math.round(horas*10)/10;
     }
   }));
   saveMensualKey(key).catch(console.error);
 
-  renderCargaLista(feriadosMes, fichajeMap);
+  renderCargaLista(feriadosMes, fichajeMap, fichajeDiarioMap);
 }
-function renderCargaLista(feriadosMes, fichajeMap){
+function renderCargaLista(feriadosMes, fichajeMap, fichajeDiarioMap){
   const datosMes = getDatosMes();
   const key = getMesKey();
   const bloqueado = mesAprobado(key);
@@ -618,6 +665,18 @@ function renderCargaLista(feriadosMes, fichajeMap){
     const fichajeTexto = horasFichaje===null ? 'no se pudo leer fichajes'
       : horasFichaje===undefined ? 'calculando...'
       : horasFichaje.toFixed(1) + ' hs según fichajes' + (COMPLEMENTOS_FICHAJE[emp.nombre] ? ' (incluye turno partido)' : '');
+    const porDia = fichajeDiarioMap ? fichajeDiarioMap[emp.id] : undefined;
+    let detalleDiarioHtml = '';
+    if(porDia && Object.keys(porDia).length){
+      const fechas = Object.keys(porDia).sort();
+      detalleDiarioHtml = '<details style="margin-top:6px;">'
+        + '<summary class="muted" style="cursor:pointer;">Ver detalle diario según fichajes ('+fechas.length+' días)</summary>'
+        + '<div style="max-height:160px;overflow-y:auto;margin-top:6px;max-width:220px;">'
+        + fechas.map(f=> '<div class="row" style="justify-content:space-between;font-size:12px;padding:2px 0;border-bottom:1px solid var(--border);"><span>'+f+'</span><span>'+porDia[f].toFixed(1)+' hs</span></div>').join('')
+        + '</div></details>';
+    } else if(porDia && Object.keys(porDia).length===0){
+      detalleDiarioHtml = '<p class="muted" style="margin-top:6px;">Sin fichajes registrados este mes.</p>';
+    }
     const feriadosHtml = feriadosMes.length ? feriadosMes.map(f=>{
       const info = d.feriados[f.date] || {horas:0};
       const wd = new Date(f.date+'T00:00:00').getDay();
@@ -641,7 +700,9 @@ function renderCargaLista(feriadosMes, fichajeMap){
       + '<div><label>Horas reales trabajadas</label><input type="number" min="0" '+dis+' data-action="horasReales" data-id="'+emp.id+'" value="'+d.horasReales+'">'
       + '<p class="muted" style="margin-top:4px;max-width:160px;">'+fichajeTexto
       + (bloqueado || horasFichaje===null || horasFichaje===undefined ? '' : ' <button class="close-x" style="color:var(--gold);" data-action="usar-fichaje" data-id="'+emp.id+'" data-horas="'+horasFichaje+'">usar</button>')
-      + '</p></div>'
+      + '</p>'
+      + detalleDiarioHtml
+      + '</div>'
       + '<div><label>Ausencias justificadas (días)</label><input type="number" min="0" '+dis+' data-action="ausJustificadas" data-id="'+emp.id+'" value="'+d.ausJustificadas+'"></div>'
       + '<div><label>Ausencias injustificadas (días)</label><input type="number" min="0" '+dis+' data-action="ausInjustificadas" data-id="'+emp.id+'" value="'+d.ausInjustificadas+'"></div>'
       + '<div><label>Cuenta corriente ($)</label><input type="number" min="0" '+dis+' data-action="cuentaCorriente" data-id="'+emp.id+'" value="'+d.cuentaCorriente+'"></div>'
