@@ -119,10 +119,11 @@
 <div id="info-panel" class="card no-print" style="margin:14px 20px;">
   <h2>Reglas de cálculo aplicadas</h2>
   <p class="muted">
-  • Valor hora = sueldo base ÷ horas promedio mensuales FIJAS de ese empleado (horas de su semana × 52 ÷ 12). Para alguien de 48 hs/semana da 208 hs siempre, sin importar el mes. Este número no cambia mes a mes, así el valor hora es estable.<br>
-  • Horas contractuales del mes (calendario real): se siguen calculando contando los días efectivos de cada mes según el esquema semanal, pero ahora se usan sólo como umbral para saber a partir de qué cantidad de horas reales empieza a haber hora extra — no para el valor hora.<br>
-  • Valor día = sueldo base ÷ días laborables del mes (calendario real, sin cambios).<br>
-  • Horas extra = horas reales trabajadas − horas contractuales del mes según calendario (si es positivo), pagadas al doble del valor hora fijo.<br>
+  • Valor hora = sueldo base ÷ horas base de ese empleado. Las horas base son un número fijo que se carga a mano por empleado (por defecto 208; Mike tiene 232). No cambian mes a mes, así el valor hora es siempre el mismo para esa persona.<br>
+  • Horas contractuales del mes (calendario real): se calculan contando los días efectivos de cada mes según el esquema semanal. Funcionan como umbral: hasta ese número de horas reales se paga como sueldo base normal; lo que lo supera se paga aparte como hora extra.<br>
+  • <b>Sueldo base de la liquidación</b> = horas reales trabajadas (topeadas en el umbral del mes) × valor hora. Si el empleado trabaja menos horas que el umbral, cobra proporcionalmente menos que el sueldo base configurado en Empleados; si trabaja justo el umbral o más, cobra el sueldo base completo. El sueldo base cargado en la pestaña Empleados es una referencia (para sacar el valor hora), no un piso garantizado.<br>
+  • Valor día = sueldo base configurado ÷ días laborables del mes (calendario real, sin cambios, se usa sólo para el descuento de ausencias).<br>
+  • Horas extra = horas reales trabajadas − horas contractuales del mes según calendario (si es positivo), pagadas al doble del valor hora.<br>
   • Feriado trabajado: por cada feriado, se compara lo trabajado contra la carga horaria normal de ese empleado para ese día de la semana. Las horas dentro de su carga habitual se pagan con un plus de 1x valor hora (quedan "al doble"). Las horas que superan su carga habitual ese día se pagan con un plus de 2x valor hora (quedan a 4x en total: normal + extra + extra doblada por feriado).<br>
   • Ausencia injustificada: descuenta 1 valor día completo por cada día. Ausencia justificada: sin descuento.<br>
   • Bono: margen de 4 infracciones "gratis" en el mes, máximo 1 por semana (semana = tramo de 7 días del mes: 1-7, 8-14, etc). La 2ª infracción de una misma semana ya es X, aunque no se llegue a 4 en el mes. Cada X descuenta $5.000 del bono (piso $0). Con 0 X, el bono se paga al doble.<br>
@@ -174,7 +175,7 @@
         <table id="tabla-liquidacion">
           <thead>
             <tr>
-              <th>Código</th><th>Nombre</th><th class="num">Sueldo Base</th>
+              <th>Código</th><th>Nombre</th><th class="num">Sueldo Base (hs reales)</th>
               <th class="num">Hs. Extra</th><th class="num">Monto Extra</th>
               <th class="num">Feriados</th><th class="num">Ausencias Injust.</th>
               <th class="num">Desc. Ausencias</th><th class="num">Bono</th>
@@ -263,17 +264,17 @@ function ym(y,mIdx){ return y + '-' + String(mIdx+1).padStart(2,'0'); }
 function esq(dom,lun,mar,mie,jue,vie,sab){ return [dom,lun,mar,mie,jue,vie,sab]; }
 function seedEmpleados(){
   return [
-    {id:uid(), codigo:'VAL', nombre:'Valen', sueldoBase:0, bonoBase:0, esquema:esq(8,8,0,6,6,6,8)},
-    {id:uid(), codigo:'LUD', nombre:'Ludmila', sueldoBase:0, bonoBase:0, esquema:esq(8,8,8,8,8,0,8)},
-    {id:uid(), codigo:'MIC', nombre:'Mica', sueldoBase:0, bonoBase:0, esquema:esq(0,8,8,8,8,8,8)},
-    {id:uid(), codigo:'DEN', nombre:'Denilson', sueldoBase:0, bonoBase:0, esquema:esq(8,8,8,0,8,8,8)},
-    {id:uid(), codigo:'PED', nombre:'Pedro', sueldoBase:0, bonoBase:0, esquema:esq(0,8,8,8,8,8,8)},
-    {id:uid(), codigo:'MIK', nombre:'Mike', sueldoBase:0, bonoBase:0, esquema:esq(12,0,8,8,8,8,12)},
-    {id:uid(), codigo:'PRI', nombre:'Pri', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
-    {id:uid(), codigo:'CAT', nombre:'Cata', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
-    {id:uid(), codigo:'LAU', nombre:'Lauti', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
-    {id:uid(), codigo:'ROC', nombre:'Rocio', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)},
-    {id:uid(), codigo:'OMA', nombre:'Omar', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)}
+    {id:uid(), codigo:'VAL', nombre:'Valen', sueldoBase:0, bonoBase:0, horasBase:208, esquema:esq(8,8,0,6,6,6,8)},
+    {id:uid(), codigo:'LUD', nombre:'Ludmila', sueldoBase:0, bonoBase:0, horasBase:208, esquema:esq(8,8,8,8,8,0,8)},
+    {id:uid(), codigo:'MIC', nombre:'Mica', sueldoBase:0, bonoBase:0, horasBase:208, esquema:esq(0,8,8,8,8,8,8)},
+    {id:uid(), codigo:'DEN', nombre:'Denilson', sueldoBase:0, bonoBase:0, horasBase:208, esquema:esq(8,8,8,0,8,8,8)},
+    {id:uid(), codigo:'PED', nombre:'Pedro', sueldoBase:0, bonoBase:0, horasBase:208, esquema:esq(0,8,8,8,8,8,8)},
+    {id:uid(), codigo:'MIK', nombre:'Mike', sueldoBase:0, bonoBase:0, horasBase:232, esquema:esq(12,0,8,8,8,8,12)},
+    {id:uid(), codigo:'PRI', nombre:'Pri', sueldoBase:0, bonoBase:0, horasBase:208, esquema:esq(8,0,8,8,8,8,8)},
+    {id:uid(), codigo:'CAT', nombre:'Cata', sueldoBase:0, bonoBase:0, horasBase:208, esquema:esq(8,0,8,8,8,8,8)},
+    {id:uid(), codigo:'LAU', nombre:'Lauti', sueldoBase:0, bonoBase:0, horasBase:208, esquema:esq(8,0,8,8,8,8,8)},
+    {id:uid(), codigo:'ROC', nombre:'Rocio', sueldoBase:0, bonoBase:0, horasBase:208, esquema:esq(8,0,8,8,8,8,8)},
+    {id:uid(), codigo:'OMA', nombre:'Omar', sueldoBase:0, bonoBase:0, horasBase:208, esquema:esq(8,0,8,8,8,8,8)}
   ];
 }
 
@@ -351,15 +352,6 @@ function horasContractualesMes(esquema, y, mIdx){
   return {horas, dias};
 }
 
-// Horas promedio mensuales FIJAS por empleado (no cambian mes a mes): horas de la semana x 52/12.
-// Para alguien de 48hs/semana da exactamente 208. Se usa sólo para fijar el valor hora (con qué
-// se "valúa" el sueldo base). El umbral de qué cuenta como hora extra sigue usando el calendario
-// real del mes (horasContractualesMes de arriba), tal como se venía calculando.
-function horasPromedioMensual(esquema){
-  const horasSemana = (esquema||[]).reduce((a,b)=>a+b,0);
-  return horasSemana * 52 / 12;
-}
-
 function calcularX(infracciones){
   const sorted = [...infracciones].sort((a,b)=> a.fecha.localeCompare(b.fecha));
   const usedWeeks = new Set();
@@ -381,11 +373,16 @@ function calcularX(infracciones){
 
 function calcularEmpleadoMes(emp, datosEmp, y, mIdx, feriadosDelMes){
   const {horas: horasContractuales, dias: diasLaborables} = horasContractualesMes(emp.esquema, y, mIdx);
-  const horasPromedio = horasPromedioMensual(emp.esquema);
-  const valorHora = horasPromedio>0 ? emp.sueldoBase/horasPromedio : 0;
+  const horasBase = emp.horasBase || 208;
+  const valorHora = horasBase>0 ? emp.sueldoBase/horasBase : 0;
   const valorDia = diasLaborables>0 ? emp.sueldoBase/diasLaborables : 0;
   const horasReales = (datosEmp && datosEmp.horasReales) || 0;
+  // Sueldo base de la liquidación = horas normales (topeadas en el umbral del mes) x valor hora.
+  // Si trabaja menos que el umbral, cobra proporcionalmente menos que el sueldo base configurado.
+  // Lo que supera el umbral se paga aparte, al doble, como horas extra.
+  const horasNormales = Math.min(horasReales, horasContractuales);
   const horasExtra = Math.max(0, horasReales - horasContractuales);
+  const sueldoBaseLiquidado = horasNormales * valorHora;
   const montoExtra = horasExtra * valorHora * 2;
 
   let montoFeriados = 0;
@@ -413,11 +410,11 @@ function calcularEmpleadoMes(emp, datosEmp, y, mIdx, feriadosDelMes){
   const bono = X===0 ? emp.bonoBase*2 : Math.max(0, emp.bonoBase - 5000*X);
 
   const cuentaCorriente = (datosEmp && datosEmp.cuentaCorriente) || 0;
-  const totalNeto = emp.sueldoBase + montoExtra + montoFeriados - montoAusencias + bono - cuentaCorriente;
+  const totalNeto = sueldoBaseLiquidado + montoExtra + montoFeriados - montoAusencias + bono - cuentaCorriente;
 
   return {
-    emp, horasContractuales, horasPromedio, diasLaborables, valorHora, valorDia,
-    horasReales, horasExtra, montoExtra,
+    emp, horasContractuales, horasBase, diasLaborables, valorHora, valorDia,
+    horasReales, horasNormales, horasExtra, sueldoBaseLiquidado, montoExtra,
     montoFeriados, detalleFeriados,
     ausJustificadas, ausInjustificadas, montoAusencias,
     infracciones, detalleInfracciones, X,
@@ -564,7 +561,8 @@ function renderConfig(){
   cont.innerHTML = empleados.map(emp=>{
     const {horas} = horasContractualesMes(emp.esquema, estado.year, estado.mIdx);
     const horasSemana = emp.esquema.reduce((a,b)=>a+b,0);
-    const horasPromedio = horasPromedioMensual(emp.esquema);
+    const horasBase = emp.horasBase || 208;
+    const valorHora = horasBase>0 ? emp.sueldoBase/horasBase : 0;
     return '<div class="empcard" data-id="'+emp.id+'">'
       + '<div class="row" style="justify-content:space-between;">'
       + '<h3>'+emp.nombre+' <span class="muted">('+emp.codigo+')</span></h3>'
@@ -574,13 +572,14 @@ function renderConfig(){
       + campoInput('Nombre','text','nombre',emp.id,emp.nombre)
       + campoInput('Código','text','codigo',emp.id,emp.codigo)
       + campoInput('Sueldo base ($)','number','sueldoBase',emp.id,emp.sueldoBase)
+      + campoInput('Horas base (para valor hora)','number','horasBase',emp.id,horasBase)
       + campoInput('Bono base ($)','number','bonoBase',emp.id,emp.bonoBase)
       + '</div>'
       + '<label style="margin-top:10px;">Esquema semanal (horas por día, 0 = franco)</label>'
       + '<div class="grid7">' + DIAS_SEMANA.map((d,i)=>{
           return '<div class="daybox"><label>'+d+'</label><input type="number" min="0" max="14" style="width:100%" data-action="esq" data-id="'+emp.id+'" data-idx="'+i+'" value="'+emp.esquema[i]+'"></div>';
         }).join('') + '</div>'
-      + '<p class="muted" style="margin-top:8px;">Horas/semana: '+horasSemana+' &nbsp;|&nbsp; Horas promedio mensuales (fijas, valor hora): '+horasPromedio.toFixed(1)+' &nbsp;|&nbsp; Horas de '+MESES[estado.mIdx]+' '+estado.year+' (umbral hs extra): '+horas+'</p>'
+      + '<p class="muted" style="margin-top:8px;">Horas/semana: '+horasSemana+' &nbsp;|&nbsp; Valor hora: '+fmtMoney(valorHora)+' (sueldo base ÷ '+horasBase+' hs) &nbsp;|&nbsp; Horas de '+MESES[estado.mIdx]+' '+estado.year+' (umbral hs extra): '+horas+'</p>'
       + '</div>';
   }).join('') || '<p class="muted">No hay empleados cargados.</p>';
 }
@@ -594,7 +593,7 @@ document.getElementById('emp-list').addEventListener('input', e=>{
   if(!emp) return;
   if(t.dataset.action==='campo'){
     const f = t.dataset.field;
-    emp[f] = (f==='sueldoBase'||f==='bonoBase') ? (parseFloat(t.value)||0) : t.value;
+    emp[f] = (f==='sueldoBase'||f==='bonoBase'||f==='horasBase') ? (parseFloat(t.value)||0) : t.value;
   } else if(t.dataset.action==='esq'){
     emp.esquema[parseInt(t.dataset.idx,10)] = parseFloat(t.value)||0;
   }
@@ -611,7 +610,7 @@ document.getElementById('emp-list').addEventListener('click', e=>{
   }
 });
 document.getElementById('btn-add-emp').addEventListener('click', ()=>{
-  empleados.push({id:uid(), codigo:'NEW', nombre:'Nuevo empleado', sueldoBase:0, bonoBase:0, esquema:esq(8,0,8,8,8,8,8)});
+  empleados.push({id:uid(), codigo:'NEW', nombre:'Nuevo empleado', sueldoBase:0, bonoBase:0, horasBase:208, esquema:esq(8,0,8,8,8,8,8)});
   saveEmpleados().catch(console.error);
   renderConfig();
 });
@@ -786,7 +785,7 @@ async function renderLiquidacion(){
     return '<tr>'
       + '<td>'+r.emp.codigo+'</td>'
       + '<td>'+r.emp.nombre+'</td>'
-      + '<td class="num">'+fmtMoney(r.emp.sueldoBase)+'</td>'
+      + '<td class="num">'+fmtMoney(r.sueldoBaseLiquidado)+'</td>'
       + '<td class="num">'+r.horasExtra.toFixed(1)+'</td>'
       + '<td class="num pos">'+fmtMoney(r.montoExtra)+'</td>'
       + '<td class="num pos">'+fmtMoney(r.montoFeriados)+'</td>'
@@ -823,9 +822,9 @@ document.getElementById('btn-export-excel').addEventListener('click', async ()=>
   const { resultados } = window._ultimaLiquidacion;
   const wb = XLSX.utils.book_new();
 
-  const resumenRows = [['Código','Nombre','Sueldo Base','Hs Extra','Monto Extra','Feriados ($)','Aus. Injust. (días)','Desc. Ausencias','Bono Base','X','Bono Final','Cta. Cte.','Total Neto']];
+  const resumenRows = [['Código','Nombre','Sueldo Base Config.','Horas Base','Horas Normales','Sueldo Base (hs reales)','Hs Extra','Monto Extra','Feriados ($)','Aus. Injust. (días)','Desc. Ausencias','Bono Base','X','Bono Final','Cta. Cte.','Total Neto']];
   resultados.forEach(r=>{
-    resumenRows.push([r.emp.codigo, r.emp.nombre, r.emp.sueldoBase, r.horasExtra, Math.round(r.montoExtra), Math.round(r.montoFeriados), r.ausInjustificadas, Math.round(r.montoAusencias), r.bonoBase, r.X, Math.round(r.bono), r.cuentaCorriente, Math.round(r.totalNeto)]);
+    resumenRows.push([r.emp.codigo, r.emp.nombre, r.emp.sueldoBase, r.horasBase, r.horasNormales, Math.round(r.sueldoBaseLiquidado), r.horasExtra, Math.round(r.montoExtra), Math.round(r.montoFeriados), r.ausInjustificadas, Math.round(r.montoAusencias), r.bonoBase, r.X, Math.round(r.bono), r.cuentaCorriente, Math.round(r.totalNeto)]);
   });
   const ws1 = XLSX.utils.aoa_to_sheet(resumenRows);
   XLSX.utils.book_append_sheet(wb, ws1, 'Resumen');
@@ -877,7 +876,7 @@ async function renderRecibo(){
   cont.innerHTML = '<div class="recibo-box" id="recibo-print">'
     + '<h2>Amapola Resto</h2>'
     + '<p><strong>'+MESES[estado.mIdx]+' '+estado.year+'</strong><br>Empleado: '+emp.nombre+' ('+emp.codigo+')</p>'
-    + '<div class="recibo-line"><span>Sueldo base</span><span>'+fmtMoney(emp.sueldoBase)+'</span></div>'
+    + '<div class="recibo-line"><span>Sueldo base ('+r.horasNormales.toFixed(1)+' hs)</span><span>'+fmtMoney(r.sueldoBaseLiquidado)+'</span></div>'
     + '<div class="recibo-line"><span>Horas extra ('+r.horasExtra.toFixed(1)+' hs)</span><span>+'+fmtMoney(r.montoExtra)+'</span></div>'
     + '<div class="recibo-line"><span>Feriados trabajados</span><span>+'+fmtMoney(r.montoFeriados)+'</span></div>'
     + '<div class="recibo-line"><span>Ausencias injustificadas ('+r.ausInjustificadas+' días)</span><span>-'+fmtMoney(r.montoAusencias)+'</span></div>'
