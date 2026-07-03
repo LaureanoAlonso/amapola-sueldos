@@ -127,6 +127,7 @@
   • Ausencia injustificada: se carga en horas (no en días) y descuenta esas horas × valor hora. Ausencia justificada: sin descuento.<br>
   • Bono: margen de 4 infracciones "gratis" en el mes, máximo 1 por semana (semana = tramo de 7 días del mes: 1-7, 8-14, etc). La 2ª infracción de una misma semana ya es X, aunque no se llegue a 4 en el mes. Cada X descuenta $5.000 del bono (piso $0). Con 0 X, el bono se paga al doble.<br>
   • Roturas / Desperdicios (Carga Mensual): monto que se resta directo del bono del mes (piso $0), con o sin sistema de X activo.<br>
+  • Adelantos (Carga Mensual): dinero ya entregado a cuenta de sueldo durante el mes. Se resta directo del Total Neto, igual que la cuenta corriente.<br>
   • Transferencia (Recibo): monto que ya se transfirió o se va a transferir a esa persona; se resta del Total Neto para obtener "A pagar en efectivo". Se carga directamente en la pestaña Recibo y también se ve reflejada en la tabla de Liquidación y en el Excel exportado.<br>
   • Los datos de este módulo viven en la nube (Firebase), en colecciones separadas de la app de fichaje de la tablet, para no interferir con ella.<br>
   • "Horas reales trabajadas" se autocompleta sumando los turnos de la app de fichajes (colección "jornadas") para ese empleado y ese mes, la primera vez que el campo está en 0. Siempre se puede editar a mano; una vez que tiene un valor manual, no se vuelve a pisar solo. Al lado del campo se muestra el total que reporta fichajes y un botón "usar" para volver a copiarlo si hace falta.<br>
@@ -182,6 +183,7 @@
               <th class="num">Desc. Ausencias</th><th class="num">Bono</th>
               <th class="num">Roturas</th>
               <th class="num">X</th><th class="num">Cta. Cte.</th>
+              <th class="num">Adelantos</th>
               <th class="num">Total Neto</th>
               <th class="num">Transferencia</th><th class="num">A Pagar Efectivo</th>
             </tr>
@@ -320,7 +322,7 @@ function getDatosMes(){
   if(!mensual[k]) mensual[k] = {};
   empleados.forEach(e=>{
     if(!mensual[k][e.id]){
-      mensual[k][e.id] = { horasReales:0, ausJustificadas:0, ausInjustificadas:0, feriados:{}, infracciones:[], cuentaCorriente:0, roturas:0, transferencia:0 };
+      mensual[k][e.id] = { horasReales:0, ausJustificadas:0, ausInjustificadas:0, feriados:{}, infracciones:[], cuentaCorriente:0, roturas:0, adelantos:0, transferencia:0 };
     }
   });
   return mensual[k];
@@ -417,7 +419,9 @@ function calcularEmpleadoMes(emp, datosEmp, y, mIdx, feriadosDelMes){
   const bono = Math.max(0, bonoConX - roturas);
 
   const cuentaCorriente = (datosEmp && datosEmp.cuentaCorriente) || 0;
-  const totalNeto = sueldoBaseLiquidado + montoExtra + montoFeriados - montoAusencias + bono - cuentaCorriente;
+  // Adelantos: dinero ya entregado a cuenta de sueldo durante el mes; se resta directo del total neto.
+  const adelantos = (datosEmp && datosEmp.adelantos) || 0;
+  const totalNeto = sueldoBaseLiquidado + montoExtra + montoFeriados - montoAusencias + bono - cuentaCorriente - adelantos;
 
   // Transferencia ya realizada/a realizar: se resta del total neto para saber cuánto queda para pagar en efectivo.
   const transferencia = (datosEmp && datosEmp.transferencia) || 0;
@@ -430,7 +434,7 @@ function calcularEmpleadoMes(emp, datosEmp, y, mIdx, feriadosDelMes){
     ausJustificadas, ausInjustificadas, montoAusencias,
     infracciones, detalleInfracciones, X,
     bonoBase: emp.bonoBase, bonoConX, roturas, bono,
-    cuentaCorriente, totalNeto,
+    cuentaCorriente, adelantos, totalNeto,
     transferencia, totalEfectivo
   };
 }
@@ -717,6 +721,7 @@ function renderCargaLista(feriadosMes, fichajeMap, fichajeDiarioMap){
       + '<div><label>Ausencias justificadas (días)</label><input type="number" min="0" '+dis+' data-action="ausJustificadas" data-id="'+emp.id+'" value="'+d.ausJustificadas+'"></div>'
       + '<div><label>Ausencias injustificadas (horas)</label><input type="number" min="0" '+dis+' data-action="ausInjustificadas" data-id="'+emp.id+'" value="'+d.ausInjustificadas+'"><p class="muted" style="margin-top:4px;max-width:160px;">Se descuentan por hora (horas ausentes × valor hora), no por día completo.</p></div>'
       + '<div><label>Cuenta corriente ($)</label><input type="number" min="0" '+dis+' data-action="cuentaCorriente" data-id="'+emp.id+'" value="'+d.cuentaCorriente+'"></div>'
+      + '<div><label>Adelantos ($)</label><input type="number" min="0" '+dis+' data-action="adelantos" data-id="'+emp.id+'" value="'+(d.adelantos||0)+'"><p class="muted" style="margin-top:4px;max-width:160px;">Se descuenta del total neto.</p></div>'
       + '<div><label>Roturas / Desperdicios ($)</label><input type="number" min="0" '+dis+' data-action="roturas" data-id="'+emp.id+'" value="'+(d.roturas||0)+'"><p class="muted" style="margin-top:4px;max-width:160px;">Se descuenta del bono.</p></div>'
       + '</div>'
       + '<label style="margin-top:10px;">Feriados del mes</label>'
@@ -742,6 +747,7 @@ document.getElementById('carga-list').addEventListener('input', e=>{
   else if(t.dataset.action==='ausJustificadas') d.ausJustificadas = parseFloat(t.value)||0;
   else if(t.dataset.action==='ausInjustificadas') d.ausInjustificadas = parseFloat(t.value)||0;
   else if(t.dataset.action==='cuentaCorriente') d.cuentaCorriente = parseFloat(t.value)||0;
+  else if(t.dataset.action==='adelantos') d.adelantos = parseFloat(t.value)||0;
   else if(t.dataset.action==='roturas') d.roturas = parseFloat(t.value)||0;
   else if(t.dataset.action==='feriado'){
     const fecha = t.dataset.fecha;
@@ -809,6 +815,7 @@ async function renderLiquidacion(){
       + '<td class="num neg">-'+fmtMoney(r.roturas)+'</td>'
       + '<td class="num">'+(r.X>0 ? '<span class="pill warn">'+r.X+'</span>' : '<span class="pill ok">0</span>')+'</td>'
       + '<td class="num neg">-'+fmtMoney(r.cuentaCorriente)+'</td>'
+      + '<td class="num neg">-'+fmtMoney(r.adelantos)+'</td>'
       + '<td class="num" style="font-weight:800;color:var(--gold)">'+fmtMoney(r.totalNeto)+'</td>'
       + '<td class="num neg">-'+fmtMoney(r.transferencia)+'</td>'
       + '<td class="num" style="font-weight:800;color:var(--gold)">'+fmtMoney(r.totalEfectivo)+'</td>'
@@ -839,9 +846,9 @@ document.getElementById('btn-export-excel').addEventListener('click', async ()=>
   const { resultados } = window._ultimaLiquidacion;
   const wb = XLSX.utils.book_new();
 
-  const resumenRows = [['Código','Nombre','Sueldo Base Config.','Horas Base','Horas Normales','Sueldo Base (hs reales)','Hs Extra','Monto Extra','Feriados ($)','Aus. Injust. (hs)','Desc. Ausencias','Bono Base','X','Roturas','Bono Final','Cta. Cte.','Total Neto','Transferencia','A Pagar Efectivo']];
+  const resumenRows = [['Código','Nombre','Sueldo Base Config.','Horas Base','Horas Normales','Sueldo Base (hs reales)','Hs Extra','Monto Extra','Feriados ($)','Aus. Injust. (hs)','Desc. Ausencias','Bono Base','X','Roturas','Bono Final','Cta. Cte.','Adelantos','Total Neto','Transferencia','A Pagar Efectivo']];
   resultados.forEach(r=>{
-    resumenRows.push([r.emp.codigo, r.emp.nombre, r.emp.sueldoBase, r.horasBase, r.horasNormales, Math.round(r.sueldoBaseLiquidado), r.horasExtra, Math.round(r.montoExtra), Math.round(r.montoFeriados), r.ausInjustificadas, Math.round(r.montoAusencias), r.bonoBase, r.X, Math.round(r.roturas), Math.round(r.bono), r.cuentaCorriente, Math.round(r.totalNeto), Math.round(r.transferencia), Math.round(r.totalEfectivo)]);
+    resumenRows.push([r.emp.codigo, r.emp.nombre, r.emp.sueldoBase, r.horasBase, r.horasNormales, Math.round(r.sueldoBaseLiquidado), r.horasExtra, Math.round(r.montoExtra), Math.round(r.montoFeriados), r.ausInjustificadas, Math.round(r.montoAusencias), r.bonoBase, r.X, Math.round(r.roturas), Math.round(r.bono), r.cuentaCorriente, Math.round(r.adelantos), Math.round(r.totalNeto), Math.round(r.transferencia), Math.round(r.totalEfectivo)]);
   });
   const ws1 = XLSX.utils.aoa_to_sheet(resumenRows);
   XLSX.utils.book_append_sheet(wb, ws1, 'Resumen');
@@ -900,6 +907,7 @@ async function renderRecibo(){
     + '<div class="recibo-line"><span>Bono ('+r.X+' X)</span><span>+'+fmtMoney(r.bonoConX)+'</span></div>'
     + (r.roturas>0 ? '<div class="recibo-line"><span>Roturas / desperdicios</span><span>-'+fmtMoney(r.roturas)+'</span></div>' : '')
     + '<div class="recibo-line"><span>Cuenta corriente</span><span>-'+fmtMoney(r.cuentaCorriente)+'</span></div>'
+    + (r.adelantos>0 ? '<div class="recibo-line"><span>Adelantos</span><span>-'+fmtMoney(r.adelantos)+'</span></div>' : '')
     + '<div class="recibo-total"><span>TOTAL NETO</span><span>'+fmtMoney(r.totalNeto)+'</span></div>'
     + '<div class="recibo-line" style="align-items:center;margin-top:10px;"><span>Transferencia</span><span>-<input type="number" min="0" id="recibo-transferencia" data-id="'+emp.id+'" value="'+r.transferencia+'" style="width:110px;text-align:right;border:1px solid #ccc;border-radius:4px;padding:2px 6px;font-family:inherit;font-size:13px;color:#111;background:#fafafa;"></span></div>'
     + '<div class="recibo-total" style="border-top:2px solid #111;"><span>A PAGAR EN EFECTIVO</span><span id="recibo-efectivo-valor">'+fmtMoney(r.totalEfectivo)+'</span></div>'
