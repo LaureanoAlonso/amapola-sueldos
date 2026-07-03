@@ -122,10 +122,9 @@
   • Valor hora = sueldo base ÷ horas base de ese empleado. Las horas base son un número fijo que se carga a mano por empleado (por defecto 208; Mike tiene 232). No cambian mes a mes, así el valor hora es siempre el mismo para esa persona.<br>
   • Horas contractuales del mes (calendario real): se calculan contando los días efectivos de cada mes según el esquema semanal. Funcionan como umbral: hasta ese número de horas reales se paga como sueldo base normal; lo que lo supera se paga aparte como hora extra.<br>
   • <b>Sueldo base de la liquidación</b> = horas reales trabajadas (topeadas en el umbral del mes) × valor hora. Si el empleado trabaja menos horas que el umbral, cobra proporcionalmente menos que el sueldo base configurado en Empleados; si trabaja justo el umbral o más, cobra el sueldo base completo. El sueldo base cargado en la pestaña Empleados es una referencia (para sacar el valor hora), no un piso garantizado.<br>
-  • Valor día = sueldo base configurado ÷ días laborables del mes (calendario real, sin cambios, se usa sólo para el descuento de ausencias).<br>
   • Horas extra = horas reales trabajadas − horas contractuales del mes según calendario (si es positivo), pagadas al doble del valor hora.<br>
   • Feriado trabajado: por cada feriado, se compara lo trabajado contra la carga horaria normal de ese empleado para ese día de la semana. Las horas dentro de su carga habitual se pagan con un plus de 1x valor hora (quedan "al doble"). Las horas que superan su carga habitual ese día se pagan con un plus de 2x valor hora (quedan a 4x en total: normal + extra + extra doblada por feriado).<br>
-  • Ausencia injustificada: descuenta 1 valor día completo por cada día. Ausencia justificada: sin descuento.<br>
+  • Ausencia injustificada: se carga en horas (no en días) y descuenta esas horas × valor hora. Ausencia justificada: sin descuento.<br>
   • Bono: margen de 4 infracciones "gratis" en el mes, máximo 1 por semana (semana = tramo de 7 días del mes: 1-7, 8-14, etc). La 2ª infracción de una misma semana ya es X, aunque no se llegue a 4 en el mes. Cada X descuenta $5.000 del bono (piso $0). Con 0 X, el bono se paga al doble.<br>
   • Roturas / Desperdicios (Carga Mensual): monto que se resta directo del bono del mes (piso $0), con o sin sistema de X activo.<br>
   • Transferencia (Recibo): monto que ya se transfirió o se va a transferir a esa persona; se resta del Total Neto para obtener "A pagar en efectivo". Se carga directamente en la pestaña Recibo y también se ve reflejada en la tabla de Liquidación y en el Excel exportado.<br>
@@ -179,7 +178,7 @@
             <tr>
               <th>Código</th><th>Nombre</th><th class="num">Sueldo Base (hs reales)</th>
               <th class="num">Hs. Extra</th><th class="num">Monto Extra</th>
-              <th class="num">Feriados</th><th class="num">Ausencias Injust.</th>
+              <th class="num">Feriados</th><th class="num">Ausencias Injust. (hs)</th>
               <th class="num">Desc. Ausencias</th><th class="num">Bono</th>
               <th class="num">Roturas</th>
               <th class="num">X</th><th class="num">Cta. Cte.</th>
@@ -407,7 +406,8 @@ function calcularEmpleadoMes(emp, datosEmp, y, mIdx, feriadosDelMes){
 
   const ausJustificadas = (datosEmp && datosEmp.ausJustificadas) || 0;
   const ausInjustificadas = (datosEmp && datosEmp.ausInjustificadas) || 0;
-  const montoAusencias = ausInjustificadas * valorDia;
+  // Ausencias injustificadas se descuentan por hora (no por día completo): horas ausentes x valor hora.
+  const montoAusencias = ausInjustificadas * valorHora;
 
   const infracciones = (datosEmp && datosEmp.infracciones) || [];
   const {X, detalle: detalleInfracciones} = calcularX(infracciones);
@@ -715,7 +715,7 @@ function renderCargaLista(feriadosMes, fichajeMap, fichajeDiarioMap){
       + detalleDiarioHtml
       + '</div>'
       + '<div><label>Ausencias justificadas (días)</label><input type="number" min="0" '+dis+' data-action="ausJustificadas" data-id="'+emp.id+'" value="'+d.ausJustificadas+'"></div>'
-      + '<div><label>Ausencias injustificadas (días)</label><input type="number" min="0" '+dis+' data-action="ausInjustificadas" data-id="'+emp.id+'" value="'+d.ausInjustificadas+'"></div>'
+      + '<div><label>Ausencias injustificadas (horas)</label><input type="number" min="0" '+dis+' data-action="ausInjustificadas" data-id="'+emp.id+'" value="'+d.ausInjustificadas+'"><p class="muted" style="margin-top:4px;max-width:160px;">Se descuentan por hora (horas ausentes × valor hora), no por día completo.</p></div>'
       + '<div><label>Cuenta corriente ($)</label><input type="number" min="0" '+dis+' data-action="cuentaCorriente" data-id="'+emp.id+'" value="'+d.cuentaCorriente+'"></div>'
       + '<div><label>Roturas / Desperdicios ($)</label><input type="number" min="0" '+dis+' data-action="roturas" data-id="'+emp.id+'" value="'+(d.roturas||0)+'"><p class="muted" style="margin-top:4px;max-width:160px;">Se descuenta del bono.</p></div>'
       + '</div>'
@@ -839,7 +839,7 @@ document.getElementById('btn-export-excel').addEventListener('click', async ()=>
   const { resultados } = window._ultimaLiquidacion;
   const wb = XLSX.utils.book_new();
 
-  const resumenRows = [['Código','Nombre','Sueldo Base Config.','Horas Base','Horas Normales','Sueldo Base (hs reales)','Hs Extra','Monto Extra','Feriados ($)','Aus. Injust. (días)','Desc. Ausencias','Bono Base','X','Roturas','Bono Final','Cta. Cte.','Total Neto','Transferencia','A Pagar Efectivo']];
+  const resumenRows = [['Código','Nombre','Sueldo Base Config.','Horas Base','Horas Normales','Sueldo Base (hs reales)','Hs Extra','Monto Extra','Feriados ($)','Aus. Injust. (hs)','Desc. Ausencias','Bono Base','X','Roturas','Bono Final','Cta. Cte.','Total Neto','Transferencia','A Pagar Efectivo']];
   resultados.forEach(r=>{
     resumenRows.push([r.emp.codigo, r.emp.nombre, r.emp.sueldoBase, r.horasBase, r.horasNormales, Math.round(r.sueldoBaseLiquidado), r.horasExtra, Math.round(r.montoExtra), Math.round(r.montoFeriados), r.ausInjustificadas, Math.round(r.montoAusencias), r.bonoBase, r.X, Math.round(r.roturas), Math.round(r.bono), r.cuentaCorriente, Math.round(r.totalNeto), Math.round(r.transferencia), Math.round(r.totalEfectivo)]);
   });
@@ -896,7 +896,7 @@ async function renderRecibo(){
     + '<div class="recibo-line"><span>Sueldo base ('+r.horasNormales.toFixed(1)+' hs)</span><span>'+fmtMoney(r.sueldoBaseLiquidado)+'</span></div>'
     + '<div class="recibo-line"><span>Horas extra ('+r.horasExtra.toFixed(1)+' hs)</span><span>+'+fmtMoney(r.montoExtra)+'</span></div>'
     + '<div class="recibo-line"><span>Feriados trabajados</span><span>+'+fmtMoney(r.montoFeriados)+'</span></div>'
-    + '<div class="recibo-line"><span>Ausencias injustificadas ('+r.ausInjustificadas+' días)</span><span>-'+fmtMoney(r.montoAusencias)+'</span></div>'
+    + '<div class="recibo-line"><span>Ausencias injustificadas ('+r.ausInjustificadas+' hs)</span><span>-'+fmtMoney(r.montoAusencias)+'</span></div>'
     + '<div class="recibo-line"><span>Bono ('+r.X+' X)</span><span>+'+fmtMoney(r.bonoConX)+'</span></div>'
     + (r.roturas>0 ? '<div class="recibo-line"><span>Roturas / desperdicios</span><span>-'+fmtMoney(r.roturas)+'</span></div>' : '')
     + '<div class="recibo-line"><span>Cuenta corriente</span><span>-'+fmtMoney(r.cuentaCorriente)+'</span></div>'
