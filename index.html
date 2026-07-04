@@ -125,7 +125,7 @@
   • Horas extra = horas reales trabajadas − horas contractuales del mes según calendario (si es positivo), pagadas al doble del valor hora.<br>
   • Feriado trabajado: por cada feriado, se compara lo trabajado contra la carga horaria normal de ese empleado para ese día de la semana. Las horas dentro de su carga habitual se pagan con un plus de 1x valor hora (quedan "al doble"). Las horas que superan su carga habitual ese día se pagan con un plus de 2x valor hora (quedan a 4x en total: normal + extra + extra doblada por feriado).<br>
   • Ausencia injustificada: se carga en horas (no en días) y descuenta esas horas × valor hora. Ausencia justificada: sin descuento.<br>
-  • Bono: margen de 4 infracciones "gratis" en el mes, máximo 1 por semana (semana = tramo de 7 días del mes: 1-7, 8-14, etc). La 2ª infracción de una misma semana ya es X, aunque no se llegue a 4 en el mes. Cada X descuenta $5.000 del bono (piso $0). Con 0 X, el bono se paga al doble.<br>
+  • Bono: margen de 4 infracciones "gratis" en el mes, máximo 1 por semana (semana = tramo de 7 días del mes: 1-7, 8-14, etc). La 2ª infracción de una misma semana ya es X, aunque no se llegue a 4 en el mes. Cada X descuenta $5.000 del bono (piso $0). Con 0 X, el bono se paga al doble. <b>Este sistema de X recién arranca en julio 2026</b>: en junio 2026 y meses anteriores, el bono se paga siempre igual al bono base configurado, sin doblar ni descontar por X.<br>
   • Roturas / Desperdicios (Carga Mensual): monto que se resta directo del bono del mes (piso $0), con o sin sistema de X activo.<br>
   • Adelantos (Carga Mensual): dinero ya entregado a cuenta de sueldo durante el mes. Se resta directo del Total Neto, igual que la cuenta corriente.<br>
   • Transferencia (Recibo): monto que ya se transfirió o se va a transferir a esa persona; se resta del Total Neto para obtener "A pagar en efectivo". Se carga directamente en la pestaña Recibo y también se ve reflejada en la tabla de Liquidación y en el Excel exportado.<br>
@@ -259,6 +259,9 @@ const TIPOS_INFRACCION = [
   'Descanso fuera de la franja definida'
 ];
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+// El sistema de bono por X (doble con 0 X, -$5.000 por X) arranca en julio 2026. Antes de eso,
+// el bono se paga siempre igual al bono base configurado (sin doblar y sin descontar por X).
+const INICIO_SISTEMA_X = '2026-07';
 
 /* ============ HELPERS ============ */
 function uid(){ return 'e' + Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
@@ -413,7 +416,11 @@ function calcularEmpleadoMes(emp, datosEmp, y, mIdx, feriadosDelMes){
 
   const infracciones = (datosEmp && datosEmp.infracciones) || [];
   const {X, detalle: detalleInfracciones} = calcularX(infracciones);
-  const bonoConX = X===0 ? emp.bonoBase*2 : Math.max(0, emp.bonoBase - 5000*X);
+  // El sistema de X (dobla con 0 X, descuenta $5.000 por X) recién arranca en julio 2026.
+  // En meses anteriores el bono se paga siempre igual al bono base, sin doblar.
+  const sistemaXActivo = ym(y, mIdx) >= INICIO_SISTEMA_X;
+  const bonoConX = !sistemaXActivo ? emp.bonoBase
+    : (X===0 ? emp.bonoBase*2 : Math.max(0, emp.bonoBase - 5000*X));
   // Roturas / desperdicios: se descuentan directo del bono (con o sin sistema de X activo).
   const roturas = (datosEmp && datosEmp.roturas) || 0;
   const bono = Math.max(0, bonoConX - roturas);
@@ -433,7 +440,7 @@ function calcularEmpleadoMes(emp, datosEmp, y, mIdx, feriadosDelMes){
     montoFeriados, detalleFeriados,
     ausJustificadas, ausInjustificadas, montoAusencias,
     infracciones, detalleInfracciones, X,
-    bonoBase: emp.bonoBase, bonoConX, roturas, bono,
+    bonoBase: emp.bonoBase, sistemaXActivo, bonoConX, roturas, bono,
     cuentaCorriente, adelantos, totalNeto,
     transferencia, totalEfectivo
   };
@@ -904,7 +911,7 @@ async function renderRecibo(){
     + '<div class="recibo-line"><span>Horas extra ('+r.horasExtra.toFixed(1)+' hs)</span><span>+'+fmtMoney(r.montoExtra)+'</span></div>'
     + '<div class="recibo-line"><span>Feriados trabajados</span><span>+'+fmtMoney(r.montoFeriados)+'</span></div>'
     + '<div class="recibo-line"><span>Ausencias injustificadas ('+r.ausInjustificadas+' hs)</span><span>-'+fmtMoney(r.montoAusencias)+'</span></div>'
-    + '<div class="recibo-line"><span>Bono ('+r.X+' X)</span><span>+'+fmtMoney(r.bonoConX)+'</span></div>'
+    + '<div class="recibo-line"><span>Bono'+(r.sistemaXActivo ? ' ('+r.X+' X)' : ' (sistema de X aún no vigente)')+'</span><span>+'+fmtMoney(r.bonoConX)+'</span></div>'
     + (r.roturas>0 ? '<div class="recibo-line"><span>Roturas / desperdicios</span><span>-'+fmtMoney(r.roturas)+'</span></div>' : '')
     + '<div class="recibo-line"><span>Cuenta corriente</span><span>-'+fmtMoney(r.cuentaCorriente)+'</span></div>'
     + (r.adelantos>0 ? '<div class="recibo-line"><span>Adelantos</span><span>-'+fmtMoney(r.adelantos)+'</span></div>' : '')
